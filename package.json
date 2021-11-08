@@ -1,0 +1,20 @@
+{
+  "name": "axiom",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "rbxtsc",
+    "watch": "rbxtsc -w"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@rbxts/compiler-types": "^1.2.3-types.1",
+    "@rbxts/types": "^1.0.536"
+  },
+  "dependencies": {
+    "@rbxts/services": "^1.2.0"
+  }
+}
