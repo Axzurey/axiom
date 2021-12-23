@@ -17,5 +17,9 @@ export default class knife_default extends weaponCore {
             skin: 'default',
             slotType: 'melee',
         });
+        //this.isAGun = false;
+        //this.isAMelee = true;
+        //this.canAim = false;
+        //this.canLean = false;
     }
 }

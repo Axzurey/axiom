@@ -9,7 +9,7 @@ namespace graphService {
     export class graph {
         vertexFolder = new Instance("Folder");
         constructor() {
-            this.vertexFolder.Name = `${os.time()}:graph`
+            this.vertexFolder.Name = `${tick()}:graph`
             this.vertexFolder.Parent = Workspace
         }
         addVertex(v1: vertex) {

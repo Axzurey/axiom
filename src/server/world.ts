@@ -44,7 +44,7 @@ namespace world {
             }
             entityKillConnections.push(t);
             return t;
-        }
+        }   
         static entityDied(killer: Player, killed: Player | undefined, entityType: entityType, hitLocation: float.playerContacts) {
             entityKillConnections.forEach((v) => {
                 coroutine.wrap(() => {

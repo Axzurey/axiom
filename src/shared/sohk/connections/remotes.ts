@@ -12,6 +12,7 @@ const remotes = { //RemoteEvent | RemoteFunction
     requestPlayerAbilityAmount: new Instance("RemoteFunction"),
     toggleData: new Instance("BindableEvent"),
     equipItem: new Instance('RemoteEvent'),
+    performAction: new Instance('RemoteEvent'),
 }
 
 for (const [index, remote] of pairs(remotes)) {

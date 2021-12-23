@@ -16,6 +16,10 @@ declare interface clientData {
         primaryAbility: {
             name: string,
             module: ability_Core
+        },
+        secondaryAbility: {
+            name: string,
+            module: ability_Core
         }
     },
 }

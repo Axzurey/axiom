@@ -22,7 +22,7 @@ export default class UISCONTROLLER {
                         events?.remove(events?.indexOf(v));
                         return;
                     }
-                    coroutine.wrap(v.callback)(gp, os.time());
+                    coroutine.wrap(v.callback)(gp, tick());
                 });
             }
         })
@@ -34,7 +34,7 @@ export default class UISCONTROLLER {
                         events?.remove(events?.indexOf(v));
                         return;
                     }
-                    coroutine.wrap(v.callback)(false, os.time());
+                    coroutine.wrap(v.callback)(false, tick());
                 });
             }
         })
@@ -66,6 +66,10 @@ export default class UISCONTROLLER {
     getCurrentMovementVector(humanoid: Humanoid) {
         let camera = Workspace.CurrentCamera as Camera;
         let direction = camera.CFrame.VectorToObjectSpace(humanoid.MoveDirection);
+        let x = math.clamp(math.round(direction.X), -1, 1);
+        let y = math.clamp(math.round(direction.Y), -1, 1);
+        let z = math.clamp(math.round(direction.Z), -1, 1);
+        direction = new Vector3(x, y, z);
         return direction;
     }
 }

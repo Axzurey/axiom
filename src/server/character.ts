@@ -1,4 +1,5 @@
 import { RunService } from "@rbxts/services";
+import { teamRoles, teams } from "shared/services/matchservice";
 import sohk from "shared/sohk/init";
 import effect from "./content/effectcore";
 import regeneration from "./content/effects/regeneration";
@@ -12,6 +13,9 @@ export default class characterClass extends sohk.sohkComponent {
     health: number = 25;
     alive: boolean = false;
     allowedOverheal: number = 75;
+
+    team: teams = teams.alpha;
+    role: teamRoles = teamRoles.attack;
 
     effects: {name: string, effect: effect}[] = [];
     lastOverheal: number = tick();

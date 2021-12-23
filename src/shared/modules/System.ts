@@ -374,6 +374,12 @@ namespace System {
             let py = c.sub(b).Magnitude;
             return px / py;
         }
+        export function percentToDegrees(percent: number) {
+            return percent * 360 / 100;
+        }
+        export function degreesToPercent(degrees: number) {
+            return degrees / 360 * 100;
+        }
     }
     
     export namespace stringf {

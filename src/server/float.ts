@@ -1,4 +1,5 @@
 import { PathfindingService, RunService, Workspace } from "@rbxts/services";
+import minerva from "shared/minerva";
 import { userid } from "./@server";
 import characterClass from "./character";
 
@@ -70,6 +71,11 @@ namespace float {
             }
         })
         return [closestModel, closestDistance];
+    }
+    export function dropBomb(position: Vector3) {
+        //clone the bomb and just drop it;
+        task.wait(minerva.timeTillDroppedBombCanBePickedUp);
+        return true;
     }
 }
 

@@ -4,6 +4,8 @@ import worldData from "shared/worlddata";
 import sohk from "shared/sohk/init";
 import characterClass from "server/character";
 import float from "server/float";
+import minerva from "shared/minerva";
+import impactSoundMap from "shared/content/mapping/impactSoundMap";
 
 export default class weaponCore extends sohk.sohkComponent {
     client: Player;
@@ -69,7 +71,7 @@ export default class weaponCore extends sohk.sohkComponent {
         this.lastEquip = tick();
         this.replicationService.remotes.toggleData.Fire('equip', this.client, this.type);
         coroutine.wrap(() => {
-            this.replicationService.remotes.requestPlayerAmmo.InvokeClient(this.client, this.ammo, this.maxAmmo + this.ammoOverload);
+            this.replicationService.remotes.requestPlayerAmmo.InvokeClient(this.client, this.ammo, this.maxAmmo + this.ammoOverload, this.reserve);
         })()
     }
     unequip() {
@@ -77,9 +79,6 @@ export default class weaponCore extends sohk.sohkComponent {
     }
     fire(origin: Vector3, look: Vector3) {//make sure this allows bursts
         if (!this.equipped) return;
-        coroutine.wrap(() => {
-            this.replicationService.remotes.requestPlayerAmmo.InvokeClient(this.client, this.ammo, this.maxAmmo + this.ammoOverload);
-        })()
         if (this.isAGun) {
             if (this.ammo <= 0) return;
             if (tick() - this.lastfired < 60 / this.firerate) return;
@@ -88,7 +87,11 @@ export default class weaponCore extends sohk.sohkComponent {
             let canScan = true;
             let last = origin;
             let pens = 0;
-            let ignore = [this.client.Character as Instance]
+            let ignore = [this.client.Character as Instance];
+            let ignore2 = [this.client.Character as Instance];
+            coroutine.wrap(() => {
+                this.replicationService.remotes.requestPlayerAmmo.InvokeClient(this.client, this.ammo, this.maxAmmo + this.ammoOverload, this.reserve);
+            })()
             while (canScan) {
                 let result = this.hitscanService.scanForHitAsync({
                     position: last,
@@ -98,6 +101,17 @@ export default class weaponCore extends sohk.sohkComponent {
                 })
                 if (result) {
                     let canpen = worldData.penetratableObjects[result.Instance.Name as keyof typeof worldData.penetratableObjects];
+                    let backr = this.hitscanService.scanForHitAsync({
+                        position: result.Position,
+                        direction: CFrame.lookAt(result.Position, origin).LookVector,
+                        distance: 999,
+                        ignore: ignore2,
+                    })
+                    if (backr && pens > 0 && pens < this.penetration) {
+                        let position = backr.Position;
+                        let normal = backr.Normal;
+                        minerva.createBulletHole(position, normal, backr.Material, 12, backr.Instance.Color);
+                    }
                     if (result.Instance.Name === "HumanoidRootPart") {
                         ignore.push(result.Instance);
                         continue;
@@ -106,11 +120,17 @@ export default class weaponCore extends sohk.sohkComponent {
                         pens += canpen;
                         if (pens > this.penetration) {canScan = false; break;}
                     }
+                    let position = result.Position;
+                    let normal = result.Normal;
                     let hit = result.Instance;
                     let char = hit.Parent;
                     let hum = char?.FindFirstChildOfClass("Humanoid") as Humanoid;
                     let player = Players.GetPlayerFromCharacter(char);
-    
+                    if (!hum) {
+                        minerva.createBulletHole(position, normal, result.Material, 12, result.Instance.Color);
+                        let t = impactSoundMap[result.Material.Name as keyof typeof impactSoundMap] || impactSoundMap.Other;
+                        minerva.createSoundAt(position, hit, 4, t)
+                    }
                     if (!hum && !canpen) {canScan = false; break;}
                     if (hum) {
                         print('hum')
@@ -212,7 +232,7 @@ export default class weaponCore extends sohk.sohkComponent {
 
         let amountneeded = this.ammo <= 0? this.maxAmmo - this.ammo: (this.maxAmmo + this.ammoOverload) - this.ammo;
 
-        if (!this.reloadCancelled) {
+        if (!this.reloadCancelled && this.reloading) {
             if (amountneeded > this.reserve) {
                 this.ammo = this.ammo + this.reserve;
                 this.reserve = 0;
@@ -225,7 +245,7 @@ export default class weaponCore extends sohk.sohkComponent {
         this.reloadCancelled = false;
         this.reloading = false;
         coroutine.wrap(() => {
-            this.replicationService.remotes.requestPlayerAmmo.InvokeClient(this.client, this.ammo, this.maxAmmo + this.ammoOverload);
+            this.replicationService.remotes.requestPlayerAmmo.InvokeClient(this.client, this.ammo, this.maxAmmo + this.ammoOverload, this.reserve);
         })()
     }
     loadRemotes() {
@@ -266,6 +286,7 @@ export default class weaponCore extends sohk.sohkComponent {
                 }
                 this.reloadCancelled = true;
                 this.reloading = false;
+                this.lastReload = 0;
             })
 
             let firemode = new Instance("RemoteEvent");

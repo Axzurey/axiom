@@ -6,9 +6,15 @@ namespace fps_framework_types {
         primary: {
             module: weaponCore,
             equipped: boolean,
+            sight: {
+                name: string,
+            }
         },
-        
         melee: {
+            module: weaponCore,
+            equipped: boolean,
+        },
+        bomb: {
             module: weaponCore,
             equipped: boolean,
         }
@@ -18,6 +24,24 @@ namespace fps_framework_types {
             module: ability_core,
             equipped: boolean,
         },
+        secondaryAbility: {
+            module: ability_core,
+            equipped: boolean,
+        },
+    }
+    export type bombViewmodel = Model & {
+        controller: AnimationController & {
+            animator: Animator
+        },
+        rightArm: MeshPart,
+        leftArm: MeshPart,
+        leftHand: Part,
+        rightHand: Part,
+        rootpart: Part,
+        main: Part,
+        offsets: Folder & {
+            idle: CFrameValue,
+        }
     }
     export type viewmodel = Model & {
         controller: AnimationController & {

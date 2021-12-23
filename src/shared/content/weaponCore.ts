@@ -3,13 +3,19 @@ import sohk from "shared/sohk/init";
 import fps_framework from "shared/modules/fps";
 import System from "shared/modules/System";
 import { unloaded_viewmodel, viewmodel } from "shared/types/fps";
+import sightcore from "./sightcore";
+import sightsMapping from "./mapping/sights";
 
 interface animationIds {
-    idle: string,
+    idle?: string,
     swing?: string,
     reload?: string,
     reloadFull?: string,
+    action?: string,
+    equip?: string,
 }
+
+const reloadExhaust = .55; //make this dynamic based on ping?
 
 export default class weaponCore extends sohk.sohkComponent {
     name: string = 'unknown gun'
@@ -17,8 +23,12 @@ export default class weaponCore extends sohk.sohkComponent {
     viewmodel: viewmodel;
     animations: {
         idle?: AnimationTrack,
+        reload?: AnimationTrack,
+        reloadFull?: AnimationTrack,
+        action?: AnimationTrack,
+        equip?: AnimationTrack,
         swing?: AnimationTrack,
-    } = {idle: undefined};
+    } = {};
 
     mousedown: boolean = false;
     equipped: boolean = false;
@@ -26,6 +36,15 @@ export default class weaponCore extends sohk.sohkComponent {
     firerate: number = 600;
     burstFireRate: number = 200;
     burstBulletRate: number = 800;
+
+    reloadLength: number = 1.5;
+
+    viewModelRecoil: {x: number, y: number, z: number, rUp: number} = {
+        x: 0,
+        y: 0,
+        z: .2,
+        rUp: 0
+    }
 
     knifeDelay: number = .75;
 
@@ -58,30 +77,61 @@ export default class weaponCore extends sohk.sohkComponent {
     fireModeSwitchCooldown: number = .75;
     skin: string;
 
-    recoil: {x: number, y: number} = {x: 2, y: 1.8}
+    recoil: {x: number, y: number} = {x: 1, y: .9};
+
+    sight: sightcore | undefined = undefined;
+
+    lastReload: number = tick();
+
+    slotType: 'primary' | 'melee' | 'bomb' | 'special';
     
     constructor(ctx: fps_framework, data: {
         name: string,
         animationIds: animationIds,
-        slotType: 'primary' | 'melee',
+        slotType: 'primary' | 'melee' | 'bomb' | 'special',
         skin: string,
+        attachments?: {sight?: string},
     }) {
         super();
         this.name = data.name;
         this.ctx = ctx;
         this.skin = data.skin;
+        this.slotType = data.slotType;
         let vm = ReplicatedStorage.FindFirstChild('viewmodel')?.Clone() as unloaded_viewmodel;
         let gun = ReplicatedStorage.FindFirstChild('guns')?.FindFirstChild(this.name)?.FindFirstChild(`${this.name}_${this.skin}`)?.Clone();
+        if (data.slotType === 'bomb') {
+            gun = ReplicatedStorage.FindFirstChild('gameModels')?.FindFirstChild('bomb')?.Clone();
+        }
+        
+        let sightSelection: sightcore | undefined = undefined;
+        if (data.attachments) {
+            sightSelection = new sightsMapping[data.attachments.sight as keyof typeof sightsMapping];
+        }
+        if (!gun) throw `gun ${data.name} can not be found`;
         gun?.GetChildren().forEach((v) => {
             if (v.IsA('BasePart')) {
                 v.CanCollide = false;
                 v.Anchored = false;
             }
+            if (v.Name === 'iron_front' || v.Name === 'iron_back') {
+                v.Destroy();
+                return;
+            }
             v.Parent = vm;
         })
 
+        this.viewmodel = vm as viewmodel;
+
         let ap = vm.FindFirstChild('aimpart') as BasePart;
         if (ap) {
+
+            if (sightSelection) {
+                this.mountSight(sightSelection);
+            }
+            else {
+                warn('no sight');
+            }
+
             let m0 = new Instance("Motor6D");
             m0.Part0 = ap;
             m0.Part1 = vm.rightArm;
@@ -107,7 +157,6 @@ export default class weaponCore extends sohk.sohkComponent {
 
         this.remotes = (ReplicatedStorage.FindFirstChild("remotes")?.FindFirstChild("requestLoad") as RemoteFunction).InvokeServer(p)
         
-        this.viewmodel = vm as viewmodel;
         this.viewmodel.SetPrimaryPartCFrame(new CFrame(0, -10000, 0));
         this.viewmodel.Parent = Workspace.CurrentCamera;
 
@@ -125,6 +174,12 @@ export default class weaponCore extends sohk.sohkComponent {
             if (i === 'swing') {
                 this.animations['swing'] = this.viewmodel.controller.animator.LoadAnimation(a);
             }
+            if (i === 'reload') {
+                this.animations['reload'] = this.viewmodel.controller.animator.LoadAnimation(a);
+            }
+            if (i === 'equip') {
+                this.animations['equip'] = this.viewmodel.controller.animator.LoadAnimation(a);
+            }
         }
 
         let conn = UserInputService.InputBegan.Connect((input, gp) => {
@@ -137,13 +192,23 @@ export default class weaponCore extends sohk.sohkComponent {
                 this.mousedown = false;
             }
         })
+        if (sightSelection) {
+            sightSelection.mountFinisher(this.viewmodel);
+        }
 
         this.viewmodel.Parent = undefined;
         temp.Destroy();
     }
+    mountSight(sight: sightcore) {
+        this.sight = sight;
+        sight.mount(this.viewmodel);
+    }
     equip() {
         this.equipped = true;
         this.viewmodel.Parent = this.ctx.camera;
+        if (this.animations.equip) {
+            this.animations.equip.Play();
+        }
     }
     unequip() {
         this.equipped = false;
@@ -151,6 +216,7 @@ export default class weaponCore extends sohk.sohkComponent {
     }
     toggleInspect(t: boolean) {
         this.inspecting = t;
+        if (this.slotType === 'bomb') return;
         if (t) {
             if (this.inspectAnimation) {
                 this.inspectAnimation.Play(.25);
@@ -163,6 +229,7 @@ export default class weaponCore extends sohk.sohkComponent {
         }
     }
     switchFireMode() {
+        if (this.slotType === 'bomb') return;
         if (tick() - this.lastFireModeSwitch < this.fireModeSwitchCooldown) return;
         if (this.fireMode >= this.fireModes.size() - 1) {
             this.fireMode = 0;
@@ -173,14 +240,64 @@ export default class weaponCore extends sohk.sohkComponent {
         this.remotes.firemode.FireServer();
     }
     reload() {
+        if (this.slotType === 'bomb') return;
+        if (tick() - this.lastReload < reloadExhaust) return;
         if (this.ctx.interactions.currentAmmo >= this.ctx.interactions.currentMaxAmmo) return;
         this.remotes.reload.FireServer();
-    }
-    cancelReload() {
-        this.remotes.cancelReload.FireServer();
+        this.ctx.reloading = true;
+        if (this.animations.reload) {
+            this.animations.reload.Play();
+            let c1 = this.animations.reload.GetMarkerReachedSignal('magout').Connect(() => {
+                this.viewmodel.audio.magout.Play();
+            })
+            let c2 = this.animations.reload.GetMarkerReachedSignal('magin').Connect(() => {
+                this.viewmodel.audio.magin.Play();
+            })
+            let c3 = this.animations.reload.GetMarkerReachedSignal('magdrop').Connect(() => {
+                let clone = this.viewmodel.mag.Clone();
+                clone.Anchored = false;
+                clone.CanCollide = true;
+                clone.Parent = Workspace.FindFirstChild('ignore');
+            })
+            this.animations.reload.Stopped.Connect(() => {
+                c1.Disconnect();
+                c2.Disconnect();
+                c3.Disconnect();
+            })
+        }
+        task.wait(this.reloadLength);
+        if (!this.ctx.reloading) return;
+        this.lastReload = tick();
         this.ctx.reloading = false;
     }
+    cancelReload() {
+        if (this.slotType === 'bomb') return;
+        if (this.remotes.cancelReload) {
+           this.remotes.cancelReload.FireServer(); 
+        }
+        this.ctx.reloading = false;
+        if (this.animations.reload && this.animations.reload.IsPlaying) {
+            this.animations.reload.Stop(.25);
+        }
+    }
+    recoilVM() {
+        let rng = new Random();
+        this.ctx.springs.viewModelRecoil.shove(new Vector3(
+            this.viewModelRecoil.x, this.viewModelRecoil.y, this.viewModelRecoil.z
+        ));
+        coroutine.wrap(() => {
+            let f1 = this.viewmodel.barrel.WaitForChild("muzzle").WaitForChild("f1") as ParticleEmitter;
+            let f2 = this.viewmodel.barrel.WaitForChild("muzzle").WaitForChild("f2") as ParticleEmitter;
+            let f = this.viewmodel.barrel.WaitForChild("muzzle").WaitForChild("flash") as ParticleEmitter;
+            f.Emit(1);
+            f1.Emit(3);
+            f2.Emit(1);
+        })()
+        this.ctx.crosshair.pushRecoil(3, .5);
+    }
     fire() {
+        if (this.slotType === 'bomb') return;
+        if (this.ctx.reloading) return;
         if (this.isAGun) {
             if (this.ctx.interactions.currentAmmo <= 0) return;
             if (this.fireMode === this.fireModes.indexOf('burst 2') || this.fireMode === this.fireModes.indexOf('burst 3')) {
@@ -198,7 +315,7 @@ export default class weaponCore extends sohk.sohkComponent {
                     if (!this.mousedown) break;
                     if (i >= ca) break;
                     this.ctx.springs.recoil.shove(new Vector3(-this.recoil.x, this.recoil.y, 0).div(1).mul(System.process.deltatime * 60));
-
+                    this.recoilVM();
                     this.lastshot = tick();
                     this.viewmodel.audio.fire.Play();
                     let effectorigin = this.viewmodel.barrel.Position;
@@ -223,7 +340,7 @@ export default class weaponCore extends sohk.sohkComponent {
                 for (let i = 0; i <= 1; i++) {
                     if (i >= ca) break;
                     this.ctx.springs.recoil.shove(new Vector3(-this.recoil.x, this.recoil.y, 0).div(1).mul(System.process.deltatime * 60));
-    
+                    this.recoilVM();
                     this.lastshot = tick();
                     this.viewmodel.audio.fire.Play();
                     let effectorigin = this.viewmodel.barrel.Position;
@@ -244,7 +361,7 @@ export default class weaponCore extends sohk.sohkComponent {
                 return;
             }
             this.ctx.springs.recoil.shove(new Vector3(-this.recoil.x, this.recoil.y, 0).div(1).mul(System.process.deltatime * 60));
-    
+            this.recoilVM();
             this.lastshot = tick();
             this.viewmodel.audio.fire.Play();
             let effectorigin = this.viewmodel.barrel.Position;

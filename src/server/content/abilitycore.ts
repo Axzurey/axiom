@@ -75,7 +75,7 @@ export default abstract class ability_Core extends sohk.sohkComponent {
             }
         }
     }
-    activate() {
+    activate(args: unknown[]) {
 
     }
     loadRemotes() {
@@ -83,9 +83,9 @@ export default abstract class ability_Core extends sohk.sohkComponent {
         this.remotesRequested = true;
         
         let use = new Instance("RemoteEvent");
-        use.OnServerEvent.Connect((player) => {
+        use.OnServerEvent.Connect((player, ...args) => {
             if (player !== this.client) return;
-            this.activate();
+            this.activate(args);
         })
         use.Parent = this.dump;
         return {
