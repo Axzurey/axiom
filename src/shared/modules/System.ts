@@ -377,6 +377,9 @@ namespace System {
         export function percentToDegrees(percent: number) {
             return percent * 360 / 100;
         }
+        export function xToDegrees(x: number, clamp: number) {
+            return x * 360 / clamp;
+        }
         export function degreesToPercent(degrees: number) {
             return degrees / 360 * 100;
         }

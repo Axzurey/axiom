@@ -10,6 +10,7 @@ const remotes = { //RemoteEvent | RemoteFunction
     requestPlayerAbilityCooldown: new Instance("RemoteFunction"),
     requestPlayerAbilityActive: new Instance("RemoteFunction"),
     requestPlayerAbilityAmount: new Instance("RemoteFunction"),
+    requestPlayerAbilityTimeLeft: new Instance("RemoteFunction"),
     toggleData: new Instance("BindableEvent"),
     equipItem: new Instance('RemoteEvent'),
     performAction: new Instance('RemoteEvent'),

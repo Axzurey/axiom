@@ -40,6 +40,14 @@ export default class match_hud extends sohk.sohkComponent {
                 'gradient': this.hud.WaitForChild('health_bar').WaitForChild('slice2').WaitForChild('img').WaitForChild('UIGradient') as UIGradient,
                 'image': this.hud.WaitForChild('health_bar').WaitForChild('slice2').WaitForChild('img') as ImageLabel,
             },
+            slice3: {
+                'gradient': this.hud.WaitForChild('health_bar').WaitForChild('slice3').WaitForChild('img').WaitForChild('UIGradient') as UIGradient,
+                'image': this.hud.WaitForChild('health_bar').WaitForChild('slice3').WaitForChild('img') as ImageLabel,
+            },
+            slice4: {
+                'gradient': this.hud.WaitForChild('health_bar').WaitForChild('slice4').WaitForChild('img').WaitForChild('UIGradient') as UIGradient,
+                'image': this.hud.WaitForChild('health_bar').WaitForChild('slice4').WaitForChild('img') as ImageLabel,
+            },
             counter: this.hud.WaitForChild('health_bar').WaitForChild('health_number') as TextLabel,
         },
         primaryAbility: {
@@ -54,6 +62,8 @@ export default class match_hud extends sohk.sohkComponent {
             image: this.hud.WaitForChild('primary_ability').WaitForChild('icon') as ImageLabel,
             amount: this.hud.WaitForChild('primary_ability').WaitForChild('amount') as TextLabel,
             keybind: this.hud.WaitForChild('primary_ability').WaitForChild('keybind') as TextLabel,
+            instance: this.hud.WaitForChild('primary_ability') as Frame,
+            gradient: this.hud.WaitForChild('primary_ability').WaitForChild('UIGradient') as UIGradient,
         },
         secondaryAbility: {
             slice1: {
@@ -67,6 +77,8 @@ export default class match_hud extends sohk.sohkComponent {
             image: this.hud.WaitForChild('secondary_ability').WaitForChild('icon') as ImageLabel,
             amount: this.hud.WaitForChild('secondary_ability').WaitForChild('amount') as TextLabel,
             keybind: this.hud.WaitForChild('secondary_ability').WaitForChild('keybind') as TextLabel,
+            instance: this.hud.WaitForChild('secondary_ability') as Frame,
+            gradient: this.hud.WaitForChild('secondary_ability').WaitForChild('UIGradient') as UIGradient,
         },
         teammateBar: this.hud.WaitForChild('teammate_bar') as Frame,
         enemyBar: this.hud.WaitForChild('enemy_bar') as Frame,
@@ -82,14 +94,22 @@ export default class match_hud extends sohk.sohkComponent {
         super();
 
         const affixHealth = (health: number, maxHealth: number) => {
-            let normalOver = mathf.normalize(maxHealth, maxHealth + minerva.allowedOverheal, health);
+            let normalOver = mathf.normalize(maxHealth, 200, health);
             if (health < maxHealth) normalOver = 0;
-            let normalBase = mathf.normalize(0, maxHealth, health);
+            let normalBase = math.clamp(mathf.normalize(0, maxHealth, health), 0, 1);
             let degrees = mathf.percentToDegrees(normalBase * 100);
             let degreesExtra = mathf.percentToDegrees(normalOver * 100);
             this.tree.health.slice1.gradient.Rotation = math.clamp(degrees, 0, 180);
-            this.tree.health.slice2.gradient.Rotation = math.clamp(degrees - 180, 180, 360);
+            this.tree.health.slice2.gradient.Rotation = math.clamp(degrees, 180, 360);
+            this.tree.health.slice3.gradient.Rotation = math.clamp(degreesExtra, 0, 180);
+            this.tree.health.slice4.gradient.Rotation = math.clamp(degreesExtra, 180, 360);
             this.tree.health.counter.Text = tostring(health);
+            if (health > 25) {
+                this.tree.health.counter.TextColor3 = new Color3(0, 0, 0);
+            }
+            else {
+                this.tree.health.counter.TextColor3 = Color3.fromRGB(150, 0, 0);
+            }
         }
 
         const affixAmmo = (ammo: number, maxAmmo: number, reserve: number) => {
@@ -100,6 +120,44 @@ export default class match_hud extends sohk.sohkComponent {
             this.currentReserve = reserve;
         }
 
+        const affixAbilityCooldown = (ability: 'primary' | 'secondary', lengthLeft: number, max: number) => {
+            print('affixing')
+            let nrml = mathf.normalize(0, max, max - lengthLeft);
+            let degrees = mathf.percentToDegrees(nrml * 100);
+            let index = this.tree[(`${ability}Ability` as 'primaryAbility' | 'secondaryAbility')];
+            index.slice1.gradient.Rotation = math.clamp(degrees, 0, 180);
+            index.slice2.gradient.Rotation = math.clamp(degrees, 180, 360);
+            if (nrml === 1) {
+                index.slice1.image.ImageColor3 = new Color3(0, 1, 1);
+                index.slice2.image.ImageColor3 = new Color3(0, 1, 1);
+            }
+            else {
+                index.slice1.image.ImageColor3 = new Color3(1, 0, 0);
+                index.slice2.image.ImageColor3 = new Color3(1, 0, 0);
+            }
+        }
+
+        const affixActive = (ability: 'primary' | 'secoondary', active: boolean) => {
+            let index = this.tree[(`${ability}Ability` as 'primaryAbility' | 'secondaryAbility')];
+        }
+
+        const affixAbilityTimeLeft = (ability: 'primary' | 'secondary', timeLeft: number, length: number) => {
+            let index = this.tree[(`${ability}Ability` as 'primaryAbility' | 'secondaryAbility')];
+            let nrml = mathf.normalize(0, length, timeLeft);
+            index.gradient.Transparency = new NumberSequence(
+                [
+                    new NumberSequenceKeypoint(0, 0),
+                    new NumberSequenceKeypoint(1 - nrml, 0),
+                    new NumberSequenceKeypoint(1 - nrml, 1),
+                    new NumberSequenceKeypoint(1, 1),
+                ]//its giving a weird overlap bugging thing idk check it
+            )
+        }
+
+        this.replicationService.remotes.requestPlayerAbilityTimeLeft.OnClientInvoke = (ability: 'primary' | 'secondary', timeLeft: number, length: number) => {
+            affixAbilityTimeLeft(ability, timeLeft, length);
+        }
+
         this.replicationService.remotes.requestPlayerHealth.OnClientInvoke = (health: number, maxHealth: number) => {
             affixHealth(health, maxHealth);
         }
@@ -108,8 +166,12 @@ export default class match_hud extends sohk.sohkComponent {
             affixAmmo(ammo, maxAmmo, reserve);
         }
 
-        this.replicationService.remotes.requestPlayerAbilityCooldown.OnClientInvoke = (ability: 'primary' | 'secondary', length: number) => {
-           
+        this.replicationService.remotes.requestPlayerAbilityAmount.OnClientInvoke = (ability: 'primary' | 'secoondary', active: boolean) => {
+
+        }
+
+        this.replicationService.remotes.requestPlayerAbilityCooldown.OnClientInvoke = (ability: 'primary' | 'secondary', lengthLeft: number, max: number) => {
+            affixAbilityCooldown(ability, lengthLeft, max);
         }
         
         const healthThread = Threading.Recursive(() => {

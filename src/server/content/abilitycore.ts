@@ -23,8 +23,12 @@ export default abstract class ability_Core extends sohk.sohkComponent {
      * at which it will return to 0
      */
     charge: number = 0;
-    cooldown: number = 0;
-    cooldownSet: number = 5;
+    cooldown: number = 30;
+    currentCooldown: number = 0;
+
+    timeLeft: number = 10;
+    activationLength: number = 10;
+    activationSequence: boolean = true;
 
     remotesRequested: boolean = false;
     charclass: characterClass
@@ -35,18 +39,28 @@ export default abstract class ability_Core extends sohk.sohkComponent {
         this.charclass = charclass;
     }
     superStartCooldown() {
-        coroutine.wrap(() => {
-            while (true) {
-                task.wait(1);
-                this.cooldown = math.clamp(this.cooldown - 1, 0, this.cooldown);
-                coroutine.wrap(() => {
-                    this.replicationService.remotes.requestPlayerAbilityCooldown.InvokeClient(
-                        this.client, this.slot, this.cooldown
-                    )
-                })()
-                if (this.cooldown <= 0) break;
+        this.currentCooldown = this.cooldown;
+        let pass = false;
+        let conn = RunService.Heartbeat.Connect((dt) => {
+            this.currentCooldown = math.clamp(this.currentCooldown - 1 * dt, 0, this.currentCooldown);
+            if (this.currentCooldown <= 0) {conn.Disconnect(); pass = true;};
+            this.replicationService.remotes.requestPlayerAbilityCooldown.InvokeClient(
+                this.client, this.slot, this.currentCooldown, this.cooldown
+            );
+        })
+        while (!pass) {task.wait()};
+    }
+    superStartActivation() {
+        this.timeLeft = this.activationLength;
+        let conn = RunService.Heartbeat.Connect((dt) => {
+            this.timeLeft = math.clamp(this.timeLeft - 1 * dt, 0, this.timeLeft);
+            if (this.timeLeft <= 0) {
+                conn.Disconnect();
             }
-        })()
+            this.replicationService.remotes.requestPlayerAbilityTimeLeft.InvokeClient(
+                this.client, this.slot, this.timeLeft, this.activationLength
+            );
+        })
     }
     /**
      * DON'T FORGET TO CALL THIS!

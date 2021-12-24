@@ -24,7 +24,7 @@ export default class illusoryDream extends ability_Core {
     }
     override activate() {
         if (this.active || this.amount <= 0) return;
-        if (this.cooldown > 0) return;
+        if (this.currentCooldown > 0) return;
         print('activated i guess?');
         let char = this.client.Character;
         if (/*float.playerCanPerformAction(this.client, 'useGadget')*/ true) {
@@ -42,9 +42,13 @@ export default class illusoryDream extends ability_Core {
                         break;
                 }
             })
-            task.wait(10);
+            this.superStartActivation();
+            print("gonna start cooldown in 5");
+            task.wait(5);
             conn.disconnect();
+            print('cooldown started');
             this.superStartCooldown();
+            this.amount ++;
         }
     }
 }

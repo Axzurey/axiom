@@ -9,8 +9,8 @@ const allEffects: Record<string, typeof effect> = {regeneration: regeneration}; 
 export default class characterClass extends sohk.sohkComponent {
     client: Player;
 
-    maxHealth: number = 110;
-    health: number = 25;
+    maxHealth: number = 100;
+    health: number = 75;
     alive: boolean = false;
     allowedOverheal: number = 75;
 

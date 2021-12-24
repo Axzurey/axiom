@@ -369,7 +369,7 @@ class main extends sohk.sohkComponent {
             let astf = clientdata[client.UserId].loadout;
             for (const [i, t] of pairs(astf)) {
                 if (i !== 'primaryAbility' && i !== 'secondaryAbility') continue;
-                return (t.module as ability_Core).amount;
+                return [i, (t.module as ability_Core).amount];
             }
         }
 
@@ -379,8 +379,19 @@ class main extends sohk.sohkComponent {
             let astf = clientdata[client.UserId].loadout;
             for (const [i, t] of pairs(astf)) {
                 if (i !== 'primaryAbility' && i !== 'secondaryAbility') continue;
-                return (t.module as ability_Core).active;
+                return [i, (t.module as ability_Core).active];
             }
+        }
+
+        this.replicationService.remotes.requestPlayerAbilityTimeLeft.OnServerInvoke = (client: Player, ...args: unknown[]) => {
+            let ability = args[0] as 'primary' | 'secondary';
+            if (ability !== 'primary' && ability !== 'secondary') return;
+            let astf = clientdata[client.UserId].loadout;
+            for (const [i, t] of pairs(astf)) {
+                if (i !== 'primaryAbility' && i !== 'secondaryAbility') continue;
+                let op = (t.module as ability_Core).activationSequence? 1: 0;
+                return [i, (t.module as ability_Core).timeLeft ^ op, (t.module as ability_Core).activationLength ^ op];
+            };
         }
 
         this.replicationService.remotes.requestPlayerAbilityCooldown.OnServerInvoke = (client: Player, ...args: unknown[]) => {
@@ -389,7 +400,7 @@ class main extends sohk.sohkComponent {
             let astf = clientdata[client.UserId].loadout;
             for (const [i, t] of pairs(astf)) {
                 if (i !== 'primaryAbility' && i !== 'secondaryAbility') continue;
-                return (t.module as ability_Core).cooldown;
+                return [i, (t.module as ability_Core).currentCooldown, (t.module as ability_Core).cooldown];
             }
         }
 
