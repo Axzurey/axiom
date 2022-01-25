@@ -96,9 +96,15 @@ export default class phyxRemoteProtocol<C extends remoteProtocol, S extends remo
         }
         return r;
     }
-    fireClient(...args: Parameters<S>) {
+    fireClient(client: Player, ...args: Parameters<S>) {
         if (RunService.IsClient()) {
             throw `fireClient can only be called on the server!`
+        }
+        if (this.remote.IsA('RemoteEvent')) {
+            this.remote.FireClient(client, ...args);
+        }
+        else {
+            return this.remote.InvokeClient(client, ...args);
         }
     }
     fireServer(...args: Parameters<C>) {
