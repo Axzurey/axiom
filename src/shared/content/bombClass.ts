@@ -22,6 +22,8 @@ export default class bombClass extends sohk.sohkComponent {
 
         this.viewmodel.PrimaryPart = this.viewmodel.main;
 
+        this.viewmodel.Name = '_VOID'
+
         this.viewmodel.SetPrimaryPartCFrame(new CFrame(0, -10000, 0));
         this.viewmodel.Parent = Workspace.CurrentCamera;
     }

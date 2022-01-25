@@ -1,4 +1,4 @@
-import connection from 'shared/connections/connection';
+import connection from 'shared/connections/sohkConnection';
 
 namespace matchService {
 
@@ -33,6 +33,14 @@ namespace matchService {
         with: Record<damagableWeapons & naturalDamage, damageData[]>, //format this for every bit of damage dealt with a gun that doesn't match another;
     }
 
+    export const roundStateConversions: Record<roundState, string> = {
+        'action': 'Action Phase',
+        'planted': 'Bomb Planted',
+        'prep': 'Preperation Phase',
+        'roundEnding': 'Round Ended',
+        'selection': 'Selection Phase',
+    }
+
     export interface victimData {
         playerName: string,
         team: teams,
@@ -57,10 +65,10 @@ namespace matchService {
     export type roundState = 'selection' | 'prep' | 'action' | 'planted' | 'roundEnding';
     export const roundStates: roundState[] = ['selection', 'prep', 'action', 'planted', 'roundEnding'];
     export const stateLengths: Record<roundState, number> = {
-        selection: 45,
-        prep: 30,
-        action: 60,
-        planted: 45,
+        selection: 10,
+        prep: 10,
+        action: 10,
+        planted: 10,
         roundEnding: 5,
     }
     /**

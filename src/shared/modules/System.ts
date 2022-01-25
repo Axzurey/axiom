@@ -360,7 +360,10 @@ namespace System {
             return (v2.Y - v1.Y) / (v2.X - v1.X);
         }
         export function lerp(v0: number, v1: number, t: number): number {
-            return v0 + t * (v1 - v0);
+            return v0 + (v1 - v0) * t
+        }
+        export function lerpV3(v0: Vector3, v1: Vector3, t: number): Vector3 {
+            return v0.add(v1.sub(v0).mul(t));
         }
         export function degToRad(args: [number, number, number]) {
             let newargs: [number, number, number] = [-1, -1, -1];
@@ -382,6 +385,44 @@ namespace System {
         }
         export function degreesToPercent(degrees: number) {
             return degrees / 360 * 100;
+        }
+        export function bezierQuadratic(t: number, p0: number, p1: number, p2: number): number {
+            return (1 - t) ^ 2 * p0 + 2 * (1 - t) * t * p1 + t ^ 2 * p2;
+        }
+        export function bezierQuadraticV3(t: number, p0: Vector3, p1: Vector3, p2: Vector3): Vector3 {
+            let l1 = lerpV3(p0, p1, t);
+            let l2 = lerpV3(p1, p2, t);
+            let q = lerpV3(l1, l2, t);
+            return q;
+        }
+        /**
+         * 
+         * @param part the part to check for the point on
+         * @param point the point to get the closest vector on the part to
+         * @returns 
+         */
+        export function closestPointOnPart(part: BasePart, point: Vector3) {
+            let t = part.CFrame.PointToObjectSpace(point);
+            let hs = part.Size.div(2);
+
+            return part.CFrame.mul(new Vector3(
+                math.clamp(t.X, -hs.X, hs.X),
+                math.clamp(t.Y, -hs.Y, hs.Y),
+                math.clamp(t.Z, -hs.Z, hs.Z),
+            ))
+        }
+        export function plotInWorld(v3: Vector3, color: Color3 = Color3.fromRGB(0, 255, 255)) {
+            let p = new Instance('Part');
+            p.Size = new Vector3(.1, .1, .1);
+            p.Color = color;
+            p.Anchored = true;
+            p.CanCollide = false;
+            p.CanQuery = false;
+            p.CanTouch = false;
+            p.Position = v3;
+            p.Shape = Enum.PartType.Ball;
+            p.Material = Enum.Material.Neon;
+            p.Parent = Workspace;
         }
     }
     

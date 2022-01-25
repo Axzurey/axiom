@@ -1,9 +1,5 @@
 import { ReplicatedStorage, RunService, Workspace } from "@rbxts/services";
-
-interface pseudo {
-    callback: (...args: never[]) => unknown;
-    disconnect: () => void;
-}
+import { sohkConnection } from "./sohkTypes";
 
 if (RunService.IsServer()) {
     if (!ReplicatedStorage.FindFirstChild('@connections.directory')) {
@@ -23,7 +19,7 @@ type cnct = (...args: never[]) => unknown;
 
 export default function connection<T extends cnct>() {
     abstract class connection {
-        static connections: pseudo[] = [];
+        static connections: sohkConnection[] = [];
         /**
          * don't forget to set this
          */
@@ -37,7 +33,7 @@ export default function connection<T extends cnct>() {
                     }
                 })
             }
-            let t: pseudo = {
+            let t: sohkConnection = {
                 callback: callback,
                 disconnect: () => {
                     let index = this.connections.indexOf(t);

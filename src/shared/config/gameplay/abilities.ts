@@ -13,6 +13,11 @@ const abilities = {
         name: 'c4',
         visualName: 'C4',
         description: 'equip an explosive that when thrown, will stick on a surface. Use the gadget button again to detonate.',
+    },
+    'mystic_portals': {
+        name: 'mystic_portals',
+        visualName: 'Mystic Portals',
+        description: 'place a portal on a wall that teleports any object that touches it to the counterpart portal',
     }
 };
 

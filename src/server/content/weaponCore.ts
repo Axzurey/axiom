@@ -6,6 +6,7 @@ import characterClass from "server/character";
 import float from "server/float";
 import minerva from "shared/minerva";
 import impactSoundMap from "shared/content/mapping/impactSoundMap";
+import breach from "shared/classes/breach";
 
 export default class weaponCore extends sohk.sohkComponent {
     client: Player;
@@ -129,7 +130,7 @@ export default class weaponCore extends sohk.sohkComponent {
                     if (!hum) {
                         minerva.createBulletHole(position, normal, result.Material, 12, result.Instance.Color);
                         let t = impactSoundMap[result.Material.Name as keyof typeof impactSoundMap] || impactSoundMap.Other;
-                        minerva.createSoundAt(position, hit, 4, t)
+                        minerva.createSoundAt(position, hit, 4, t);
                     }
                     if (!hum && !canpen) {canScan = false; break;}
                     if (hum) {
@@ -219,13 +220,11 @@ export default class weaponCore extends sohk.sohkComponent {
         if (this.reserve <= 0) return;
 
         this.lastReload = tick();
-        let length = this.reloadLength;
+        /*let length = this.reloadLength;
         if (this.ammo <= 0) {
             length = this.fullReloadLength;
-        };
+        };*/
         this.reloading = true;
-
-        task.wait(length);
 
         if (this.ammo >= this.maxAmmo + this.ammoOverload) return;
         if (this.reserve <= 0) return;
@@ -305,11 +304,27 @@ export default class weaponCore extends sohk.sohkComponent {
                 }
             })
 
+            let requestAmmo = new Instance("RemoteFunction");
+            requestAmmo.Parent = remotebin;
+
+            requestAmmo.OnServerInvoke = (client: Player) => {
+                if (client !== this.client) {
+                    when.playerFiringRemoteThatIsntTheirs(this.client);
+                    return;
+                }
+                return [this.ammo, this.maxAmmo, this.ammoOverload, this.reserve];
+            }
+
             return {
-                fire: fire,
-                reload: reload,
-                cancelReload: cancelReload,
-                firemode: firemode,
+                remotes: {
+                    fire: fire,
+                    reload: reload,
+                    cancelReload: cancelReload,
+                    firemode: firemode,
+                },
+                calls: {
+                    requestAmmo: requestAmmo
+                }
             } 
         }
         else if (this.isAMelee) {
@@ -324,7 +339,10 @@ export default class weaponCore extends sohk.sohkComponent {
                 this.fire(args[0] as Vector3, args[1] as Vector3);
             })
             return {
-                melee: melee,
+                remotes: {
+                    melee: melee
+                },
+                calls: {},
             }
         }
     }

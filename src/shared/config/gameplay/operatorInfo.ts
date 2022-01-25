@@ -8,6 +8,13 @@ const operatorInfo = {
         visualName: 'Athena',
         icon: '',
     },
+    tau: {
+        role: 'attacker',
+        primaryAbility: '',
+        secondaryAbility: [],
+        visualName: 'Tau',
+        icon: '',
+    },
 };
 
 export = operatorInfo;

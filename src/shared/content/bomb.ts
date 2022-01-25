@@ -23,6 +23,5 @@ export default class bomb extends weaponCore {
         if (!floor) throw `could not find a suitable floor`;
         let camCF = this.ctx.camera.CFrame;
         let look = CFrame.lookAt(camCF.Position, floor.Position);
-        
     }
 }

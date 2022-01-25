@@ -7,7 +7,7 @@ namespace minerva {
     export const allowedOverheal: number = 50;
 
     export const reloadLengths = {
-        mpx: 1.28,
+        mpx: 1.28, glock18: 1.4,
     }
 
     export const bombPlantTime = 5;
@@ -15,6 +15,8 @@ namespace minerva {
     export const defuseRange = 8;
     export const timeTillDroppedBombCanBePickedUp = .5;
     export const bombName = '@entity.bomb';
+
+    export const serverName = 'Minerva System';
 
     export let isBombPlanted: boolean = false;
 
@@ -104,8 +106,8 @@ namespace minerva {
             let c = RunService.Heartbeat.Connect((dt) => {
                 delta += 1 * dt;
                 t += 1 * dt;
-                objs.ball.CFrame = objs.ball.CFrame.mul(CFrame.Angles(math.rad(2 * delta * dt), 0, 0));
-                objs.ring.CFrame = objs.ring.CFrame.mul(CFrame.Angles(0, math.rad(2 * delta * 2 * dt), 0));
+                objs.ball.CFrame = objs.ball.CFrame.mul(CFrame.Angles(math.rad(5 * delta * dt), 0, 0));
+                objs.ring.CFrame = objs.ring.CFrame.mul(CFrame.Angles(0, math.rad(5 * delta * 2 * dt), 0));
                 bg = math.clamp(bg + (matchService.stateLengths.planted / 12) * dt, 0, 255);
                 objs.ball.Color = Color3.fromRGB(255, bg, bg);
                 objs.ring.Color = Color3.fromRGB(150, bg, bg);

@@ -4,6 +4,7 @@ import sohk from "shared/sohk/init";
 
 export default abstract class ability_Core extends sohk.sohkComponent {
     client: Player;
+    alive: boolean = true;
 
     amount: number = 0;
     maxAmount: number = 1;
@@ -32,18 +33,30 @@ export default abstract class ability_Core extends sohk.sohkComponent {
 
     remotesRequested: boolean = false;
     charclass: characterClass
-    slot: string = 'primary';
+    slot: 'primary' | 'secondary' = 'primary';
     constructor(client: Player, charclass: characterClass) {
         super();
         this.client = client;
         this.charclass = charclass;
+    }
+    superDeductAmount(x: number = 1) {
+        this.amount = math.clamp(this.amount - x, 0, this.maxAmount);
+        this.replicationService.remotes.requestPlayerAbilityAmount.InvokeClient(
+            this.client, this.slot, this.amount
+        );
+    }
+    superToggleActive(a: boolean) {
+        this.active = a;
+        this.replicationService.remotes.requestPlayerAbilityActive.InvokeClient(
+            this.client, this.slot, this.active
+        );
     }
     superStartCooldown() {
         this.currentCooldown = this.cooldown;
         let pass = false;
         let conn = RunService.Heartbeat.Connect((dt) => {
             this.currentCooldown = math.clamp(this.currentCooldown - 1 * dt, 0, this.currentCooldown);
-            if (this.currentCooldown <= 0) {conn.Disconnect(); pass = true;};
+            if (this.currentCooldown <= 0 || !this.alive) {conn.Disconnect(); pass = true;};
             this.replicationService.remotes.requestPlayerAbilityCooldown.InvokeClient(
                 this.client, this.slot, this.currentCooldown, this.cooldown
             );
@@ -51,14 +64,20 @@ export default abstract class ability_Core extends sohk.sohkComponent {
         while (!pass) {task.wait()};
     }
     superStartActivation() {
+        if (!this.activationSequence) {
+            this.replicationService.remotes.requestPlayerAbilityTimeLeft.InvokeClient(
+                this.client, this.slot, 1, 1, false
+            );
+            return;
+        }
         this.timeLeft = this.activationLength;
         let conn = RunService.Heartbeat.Connect((dt) => {
             this.timeLeft = math.clamp(this.timeLeft - 1 * dt, 0, this.timeLeft);
-            if (this.timeLeft <= 0) {
+            if (this.timeLeft <= 0 || !this.alive) {
                 conn.Disconnect();
             }
             this.replicationService.remotes.requestPlayerAbilityTimeLeft.InvokeClient(
-                this.client, this.slot, this.timeLeft, this.activationLength
+                this.client, this.slot, this.timeLeft, this.activationLength, this.activationSequence
             );
         })
     }
@@ -66,31 +85,17 @@ export default abstract class ability_Core extends sohk.sohkComponent {
      * DON'T FORGET TO CALL THIS!
      */
     public init() {
-        let lastEpch = tick();
-        if (this.timeTillNextIncrease) {
-            let increaseConnection = RunService.Stepped.Connect((_time, dt) => {
-                this.charge += 1 * dt;
-                if (this.charge >= this.timeTillNextIncrease) {
-                    this.charge = 0;
-                    this.amount += this.amountPerIncrease;
-                }
-            })
-            if (tick() - lastEpch > .1) {
-                coroutine.wrap(() => {
-                    this.replicationService.remotes.requestPlayerAbilityActive.InvokeClient(
-                        this.client, this.slot, this.active
-                    )
-                })()
-                coroutine.wrap(() => {
-                    this.replicationService.remotes.requestPlayerAbilityAmount.InvokeClient(
-                        this.client, this.slot, this.amount
-                    )
-                })()
-            }
-        }
+        coroutine.wrap(() => {
+            this.replicationService.remotes.requestPlayerAbilityAmount.InvokeClient(
+                this.client, this.slot, this.amount
+            );
+        })()
     }
-    activate(args: unknown[]) {
+    public activate(args: unknown[]) {
 
+    }
+    public destroy() {
+        this.alive = false;
     }
     loadRemotes() {
         if (this.remotesRequested) return;

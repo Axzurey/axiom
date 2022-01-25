@@ -7,10 +7,17 @@ declare interface clientData {
     loadout: {
         primary: {
             name: string,
-            module: weaponCore
+            skin: string,
+            module: weaponCore,
+        },
+        secondary: {
+            name: string,
+            skin: string,
+            module: weaponCore,
         },
         melee: {
             name: string,
+            skin: string,
             module: weaponCore,
         },
         primaryAbility: {

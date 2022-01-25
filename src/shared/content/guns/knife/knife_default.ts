@@ -1,5 +1,5 @@
 import fps_framework from "shared/modules/fps";
-import weaponCore from "../weaponCore";
+import weaponCore from "../../weaponCore";
 
 export default class knife_default extends weaponCore {
     isAGun = false;
@@ -7,6 +7,8 @@ export default class knife_default extends weaponCore {
     canAim = false;
     canLean = false;
     inverseMovementTilt = true;
+    bobIntensityModifier = 1;
+    bobSpeedModifier = 1;
     constructor(ctx: fps_framework) {
         super(ctx, {
             name: 'knife',

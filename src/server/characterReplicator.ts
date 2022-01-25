@@ -1,17 +1,17 @@
 import { Players } from "@rbxts/services";
 import sohk from "shared/sohk/init";
 
-const maxAllowedDifference = 16 * (1 / 60); //16 studs a second, multiplied by 1 / 60th of a second
+const maxAllowedDifferenceX = 15;
+const maxAllowedDifferenceY = 10;
+const maxAllowedDifferenceZ = 15;
+
+const maxHeight = 100;
+const minHeight = -100;
 
 export default class characterReplicator extends sohk.sohkComponent {
     lastCFrames: Record<number, {cf: CFrame, pass: boolean, delta: number}> = {};
     constructor() {
         super();
-        const conn = this.replicationService.remotes.replicateCharacter.OnServerEvent.Connect((client, ...args: unknown[]) => {
-            let cf = args[0] as CFrame;
-            if (!cf) return;
-            this.changeCFrame(client, cf);
-        })
     }
     newPlayer(client: Player) {
         this.lastCFrames[client.UserId] = {
@@ -26,10 +26,14 @@ export default class characterReplicator extends sohk.sohkComponent {
         let dir = this.lastCFrames[client.UserId];
         let pass = dir.pass;
         let last = dir.cf;
-        if (pass) return true;
-        dir.pass = false;
+        if (pass) {
+            dir.pass = false;
+            return true;
+        }
 
-        let difference = (position.sub(last.Position)).Magnitude;
+        let differenceX = math.abs(last.Position.X - position.X);
+        let differenceY = math.abs(last.Position.Y - position.Y);
+        let differenceZ = math.abs(last.Position.Z - position.Z)
         let delta = tick() - dir.delta;
         let ideal = 1 / 60;
         
@@ -37,26 +41,25 @@ export default class characterReplicator extends sohk.sohkComponent {
         let ispos = deltaoff >= 0? true: false;
         deltaoff = math.abs(deltaoff);
 
-        if (difference > maxAllowedDifference) {
+        if (differenceX > maxAllowedDifferenceX || differenceY > maxAllowedDifferenceY || differenceZ > maxAllowedDifferenceZ) {
+            print(dir.cf.Position, cf.Position, 'not allowed')
+            return false;
+        }
+        else if (position.Y > maxHeight || position.Y < minHeight) {
             return false;
         }
 
         return true;
     }
-    changeCFrame(client: Player, cf: CFrame) {
-        Players.GetPlayers().forEach((player) => {
-            if (player === client) return;
-            this.replicationService.remotes.replicateCharacter.FireClient(player, client, cf);
-        })
-        let reEval = this.validateCFrame(client, cf);
-        if (!reEval) {
-            Players.GetPlayers().forEach((player) => {
-                if (player === client) return;
-                this.replicationService.remotes.replicateCharacter.FireClient(player, client, cf);
-            })
-            this.replicationService.remotes.replicateCharacter.FireClient(
-                client, this.lastCFrames[client.UserId].cf);
-        }
-
+    setCFrame(player: Player, cf: CFrame) {
+        let dir = this.lastCFrames[player.UserId];
+        dir.cf = cf;
+        dir.delta = tick();
+    }
+    getLast(player: Player) {
+        return this.lastCFrames[player.UserId].cf;
+    }
+    givePass(player: Player) {
+        this.lastCFrames[player.UserId].pass = true;
     }
 }

@@ -2,7 +2,6 @@
 const remotes = { //RemoteEvent | RemoteFunction
     renderFunction: new Instance('RemoteEvent'),
     updatePlayerAction: new Instance("RemoteEvent"),
-    replicateCharacter: new Instance("RemoteEvent"),
     requestRemote: new Instance("RemoteFunction"),
     requestPlayerHealth: new Instance("RemoteFunction"),
     requestPlayerAmmo: new Instance("RemoteFunction"),
@@ -14,6 +13,7 @@ const remotes = { //RemoteEvent | RemoteFunction
     toggleData: new Instance("BindableEvent"),
     equipItem: new Instance('RemoteEvent'),
     performAction: new Instance('RemoteEvent'),
+    act: new Instance('RemoteEvent'),
 }
 
 for (const [index, remote] of pairs(remotes)) {

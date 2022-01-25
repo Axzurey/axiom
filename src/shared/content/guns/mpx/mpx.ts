@@ -11,6 +11,7 @@ export default class mpx_default extends weaponCore {
                 animationIds: {
                     idle: animationsMap.mpx_idle,
                     reload: animationsMap.mpx_reload,
+                    equip: animationsMap.mpx_equip,
                 },
                 slotType: 'primary',
                 skin: 'default',

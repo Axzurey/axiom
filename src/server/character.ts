@@ -22,6 +22,10 @@ export default class characterClass extends sohk.sohkComponent {
     overhealFloatTime: number = 5;
     overhealDecrement: number = 5;
 
+    rappelling: boolean = false;
+    lastRappel: number = tick();
+    RAPPEL_COOLDOWN: number = 1;
+
     constructor(client: Player) {
         super();
         this.client = client;

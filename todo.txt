@@ -1,0 +1,1 @@
+make camera bob while rappelling and moving

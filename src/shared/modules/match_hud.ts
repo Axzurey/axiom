@@ -1,7 +1,9 @@
 import { Players, ReplicatedStorage } from "@rbxts/services"
 import minerva from "shared/minerva";
+import matchService, { roundState, roundStateConversions } from "shared/services/matchservice";
 import sohk from "shared/sohk/init";
 import { mathf, Threading } from "./System";
+import { sohkConnection } from "shared/connections/sohkTypes";
 
 const _hudFolder = ReplicatedStorage.WaitForChild('hud') as Folder;
 
@@ -90,6 +92,10 @@ export default class match_hud extends sohk.sohkComponent {
     currentAmmo: number = 0;
     currentMaxAmmo: number = 0;
     currentReserve: number = 0;
+    
+    rbxConnections: RBXScriptConnection[] = [];
+    customConnections: sohkConnection[] = [];
+    
     constructor() {
         super();
 
@@ -121,15 +127,14 @@ export default class match_hud extends sohk.sohkComponent {
         }
 
         const affixAbilityCooldown = (ability: 'primary' | 'secondary', lengthLeft: number, max: number) => {
-            print('affixing')
             let nrml = mathf.normalize(0, max, max - lengthLeft);
             let degrees = mathf.percentToDegrees(nrml * 100);
             let index = this.tree[(`${ability}Ability` as 'primaryAbility' | 'secondaryAbility')];
             index.slice1.gradient.Rotation = math.clamp(degrees, 0, 180);
             index.slice2.gradient.Rotation = math.clamp(degrees, 180, 360);
             if (nrml === 1) {
-                index.slice1.image.ImageColor3 = new Color3(0, 1, 1);
-                index.slice2.image.ImageColor3 = new Color3(0, 1, 1);
+                index.slice1.image.ImageColor3 = Color3.fromRGB(87, 3, 255);
+                index.slice2.image.ImageColor3 = Color3.fromRGB(87, 3, 255);
             }
             else {
                 index.slice1.image.ImageColor3 = new Color3(1, 0, 0);
@@ -137,25 +142,83 @@ export default class match_hud extends sohk.sohkComponent {
             }
         }
 
-        const affixActive = (ability: 'primary' | 'secoondary', active: boolean) => {
+        const affixActive = (ability: 'primary' | 'secondary', active: boolean) => {
             let index = this.tree[(`${ability}Ability` as 'primaryAbility' | 'secondaryAbility')];
+            if (active) {
+                index.gradient.Color = new ColorSequence(Color3.fromRGB(144, 144, 144));
+                index.slice1.image.ImageColor3 = Color3.fromRGB(87, 3, 255);
+                index.slice2.image.ImageColor3 = Color3.fromRGB(87, 3, 255);
+            }
+            else {
+                index.gradient.Color = new ColorSequence(Color3.fromRGB(144, 144, 144));
+                index.slice1.image.ImageColor3 = new Color3(1, 0, 0);
+                index.slice2.image.ImageColor3 = new Color3(1, 0, 0);
+            }//btw primary and secondary in explorer aren't the same; fix that.
         }
 
-        const affixAbilityTimeLeft = (ability: 'primary' | 'secondary', timeLeft: number, length: number) => {
+        const affixAmount = (ability: 'primary' | 'secondary', amount: number) => {
             let index = this.tree[(`${ability}Ability` as 'primaryAbility' | 'secondaryAbility')];
-            let nrml = mathf.normalize(0, length, timeLeft);
-            index.gradient.Transparency = new NumberSequence(
-                [
-                    new NumberSequenceKeypoint(0, 0),
-                    new NumberSequenceKeypoint(1 - nrml, 0),
-                    new NumberSequenceKeypoint(1 - nrml, 1),
-                    new NumberSequenceKeypoint(1, 1),
-                ]//its giving a weird overlap bugging thing idk check it
-            )
+            index.amount.Text = tostring(amount);
         }
 
-        this.replicationService.remotes.requestPlayerAbilityTimeLeft.OnClientInvoke = (ability: 'primary' | 'secondary', timeLeft: number, length: number) => {
-            affixAbilityTimeLeft(ability, timeLeft, length);
+        const affixAbilityTimeLeft = (ability: 'primary' | 'secondary', timeLeft: number, length: number, drainable: boolean) => {
+            let index = this.tree[(`${ability}Ability` as 'primaryAbility' | 'secondaryAbility')];
+            let nrml = math.clamp(mathf.normalize(0, length, timeLeft), 0, 1);
+            let deg = mathf.percentToDegrees(nrml * 100);
+            if (drainable) {
+                index.slice1.gradient.Rotation = math.clamp(deg, 0, 180);
+                index.slice2.gradient.Rotation = math.clamp(deg, 180, 360);
+            }
+            else {
+                index.slice1.gradient.Rotation = 180;
+                index.slice2.gradient.Rotation = 360;
+            }
+            /*
+            if (nrml === 0 || !drainable) {
+                index.gradient.Transparency = new NumberSequence(1);
+            }
+            else {
+                index.gradient.Transparency = new NumberSequence(
+                    [
+                        new NumberSequenceKeypoint(0, 0),
+                        new NumberSequenceKeypoint(nrml, 0),
+                        new NumberSequenceKeypoint(math.clamp(nrml + .01, 0, 1), 1),
+                        new NumberSequenceKeypoint(1, 1),
+                    ]//its giving a weird overlap bugging thing idk check it
+                )
+            }*/
+        }
+
+        const updateTime = (time: number) => {
+            this.tree.timer.Text = tostring(math.round(time));
+            if (time < 3) {
+                this.tree.timer.TextColor3 = new Color3(1, 0, 0);
+            }
+            else {
+                this.tree.timer.TextColor3 = new Color3(1, 1, 1);
+            }
+        }
+
+        const updatePhase = (phase: roundState) => {
+            this.tree.phase.Text = roundStateConversions[phase];
+            if (phase === 'planted') {
+                this.tree.phase.TextColor3 = new Color3(1, 0, 0);
+            }
+            else {
+                this.tree.phase.TextColor3 = Color3.fromRGB(217, 217, 217);
+            }
+        }
+
+        matchService.timerUpdated.connect((time) => {
+            updateTime(time);
+        })
+
+        matchService.roundStateUpdated.connect((phase: roundState) => {
+            updatePhase(phase);
+        })
+
+        this.replicationService.remotes.requestPlayerAbilityTimeLeft.OnClientInvoke = (ability: 'primary' | 'secondary', timeLeft: number, length: number, drainable: boolean) => {
+            affixAbilityTimeLeft(ability, timeLeft, length, drainable);
         }
 
         this.replicationService.remotes.requestPlayerHealth.OnClientInvoke = (health: number, maxHealth: number) => {
@@ -166,8 +229,12 @@ export default class match_hud extends sohk.sohkComponent {
             affixAmmo(ammo, maxAmmo, reserve);
         }
 
-        this.replicationService.remotes.requestPlayerAbilityAmount.OnClientInvoke = (ability: 'primary' | 'secoondary', active: boolean) => {
+        this.replicationService.remotes.requestPlayerAbilityActive.OnClientInvoke = (ability: 'primary' | 'secondary', active: boolean) => {
+            affixActive(ability, active);
+        }
 
+        this.replicationService.remotes.requestPlayerAbilityAmount.OnClientInvoke = (ability: 'primary' | 'secondary', amount: number) => {
+            affixAmount(ability, amount);
         }
 
         this.replicationService.remotes.requestPlayerAbilityCooldown.OnClientInvoke = (ability: 'primary' | 'secondary', lengthLeft: number, max: number) => {

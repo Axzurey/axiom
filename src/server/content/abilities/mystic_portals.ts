@@ -4,8 +4,8 @@ import float from "server/float";
 import when from "server/world";
 import ability_Core from "../abilitycore";
 
-export default class illusoryDream extends ability_Core {
-    amount = 2;
+export default class mysticPortals extends ability_Core {
+    amount = 2; //green and purple portals. can toggle between which ones to place
     maxAmount = 2;
     constructor(client: Player, charclass: characterClass) {
         super(client, charclass);

@@ -6,7 +6,14 @@ namespace fps_framework_types {
         primary: {
             module: weaponCore,
             equipped: boolean,
-            sight: {
+            sight?: {
+                name: string,
+            }
+        },
+        secondary: {
+            module: weaponCore,
+            equipped: boolean,
+            sight?: {
                 name: string,
             }
         },
@@ -52,6 +59,9 @@ namespace fps_framework_types {
         leftHand: Part,
         rightHand: Part,
         rootpart: Part,
+        rightMotor: Motor6D,
+        leftMotor: Motor6D,
+        apMotor: Motor6D,
         aimpart: Part,
         barrel: Part,
         sightNode: Part,
@@ -70,6 +80,17 @@ namespace fps_framework_types {
         }
     }
 
+    export type arm_viewmodel = Model & {
+        leftHand: Part,
+        rightHand: Part,
+        rightArm: MeshPart,
+        leftArm: MeshPart,
+        rootpart: Part,
+        offsets: Folder & {
+            idle: CFrameValue,
+        },
+    }
+
     export type unloaded_viewmodel = Model & {
         controller: AnimationController & {
             animator: Animator
@@ -81,7 +102,7 @@ namespace fps_framework_types {
         rootpart: Part,
         offsets: Folder & {
             idle: CFrameValue,
-        }
+        },
     }
 }
 

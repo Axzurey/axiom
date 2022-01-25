@@ -1,10 +1,12 @@
-import { Debris, ReplicatedStorage, RunService, UserInputService, Workspace } from "@rbxts/services";
+import { Debris, ReplicatedStorage, RunService, TweenService, UserInputService, Workspace } from "@rbxts/services";
 import sohk from "shared/sohk/init";
 import fps_framework from "shared/modules/fps";
-import System from "shared/modules/System";
+import System, { mathf, Threading } from "shared/modules/System";
 import { unloaded_viewmodel, viewmodel } from "shared/types/fps";
 import sightcore from "./sightcore";
 import sightsMapping from "./mapping/sights";
+import tracer from "shared/classes/tracer";
+import interpolations from "shared/functions/interpolations";
 
 interface animationIds {
     idle?: string,
@@ -13,6 +15,8 @@ interface animationIds {
     reloadFull?: string,
     action?: string,
     equip?: string,
+    empty?: string,
+    fire?: string,
 }
 
 const reloadExhaust = .55; //make this dynamic based on ping?
@@ -23,6 +27,8 @@ export default class weaponCore extends sohk.sohkComponent {
     viewmodel: viewmodel;
     animations: {
         idle?: AnimationTrack,
+        empty?: AnimationTrack,
+        fire?: AnimationTrack,
         reload?: AnimationTrack,
         reloadFull?: AnimationTrack,
         action?: AnimationTrack,
@@ -46,6 +52,8 @@ export default class weaponCore extends sohk.sohkComponent {
         rUp: 0
     }
 
+    equipping: boolean = false;
+
     knifeDelay: number = .75;
 
     stabDamage: number = 75;
@@ -53,6 +61,9 @@ export default class weaponCore extends sohk.sohkComponent {
     meleeRange: number = 7;
 
     inspectAnimation: AnimationTrack | undefined = undefined;
+
+    bobSpeedModifier = 1;
+    bobIntensityModifier = 1;
 
     canLean: boolean = true;
     canAim: boolean = true;
@@ -70,6 +81,7 @@ export default class weaponCore extends sohk.sohkComponent {
 
     lastshot: number = tick();
     remotes: Record<string, RemoteEvent> = {};
+    calls: Record<string, RemoteFunction> = {};
 
     fireModes: ('auto' | 'burst 2' | 'burst 3' | 'semi' | 'shotgun')[] = ['auto', 'semi', 'burst 3'];
     fireMode: number = 0;
@@ -83,12 +95,19 @@ export default class weaponCore extends sohk.sohkComponent {
 
     lastReload: number = tick();
 
-    slotType: 'primary' | 'melee' | 'bomb' | 'special';
+    slotType: 'primary' | 'melee' | 'bomb' | 'special' | 'secondary';
+
+    vmOffset: CFrameValue = new Instance("CFrameValue");
+
+    ammo: number = 0;
+    maxAmmo: number = 0;
+    ammoOverload: number = 0;
+    reserve: number = 0;
     
     constructor(ctx: fps_framework, data: {
         name: string,
         animationIds: animationIds,
-        slotType: 'primary' | 'melee' | 'bomb' | 'special',
+        slotType: 'primary' | 'secondary' | 'melee' | 'bomb' | 'special',
         skin: string,
         attachments?: {sight?: string},
     }) {
@@ -105,7 +124,9 @@ export default class weaponCore extends sohk.sohkComponent {
         
         let sightSelection: sightcore | undefined = undefined;
         if (data.attachments) {
-            sightSelection = new sightsMapping[data.attachments.sight as keyof typeof sightsMapping];
+            if (data.attachments.sight) {
+                sightSelection = new sightsMapping[data.attachments.sight as keyof typeof sightsMapping];
+            }
         }
         if (!gun) throw `gun ${data.name} can not be found`;
         gun?.GetChildren().forEach((v) => {
@@ -134,16 +155,19 @@ export default class weaponCore extends sohk.sohkComponent {
 
             let m0 = new Instance("Motor6D");
             m0.Part0 = ap;
+            m0.Name = 'rightMotor';
             m0.Part1 = vm.rightArm;
             m0.Parent = vm;
 
             let m1 = new Instance("Motor6D");
             m1.Part0 = ap;
             m1.Part1 = vm.leftArm;
+            m1.Name = 'leftMotor';
             m1.Parent = vm;
 
             let m2 = new Instance("Motor6D");
             m2.Part0 = vm.rootpart;
+            m2.Name = 'apMotor';
             m2.Part1 = ap;
             m2.Parent = vm;
 
@@ -154,9 +178,15 @@ export default class weaponCore extends sohk.sohkComponent {
         }
 
         let p = data.slotType;
+        if (this.slotType !== 'bomb') {
+            let r = (ReplicatedStorage.FindFirstChild("remotes")?.FindFirstChild("requestLoad") as RemoteFunction).InvokeServer(p) as {
+                remotes: Record<string, RemoteEvent>,
+                calls: Record<string, RemoteFunction>,
+            }
+            this.remotes = r.remotes;
+            this.calls = r.calls;
+        }
 
-        this.remotes = (ReplicatedStorage.FindFirstChild("remotes")?.FindFirstChild("requestLoad") as RemoteFunction).InvokeServer(p)
-        
         this.viewmodel.SetPrimaryPartCFrame(new CFrame(0, -10000, 0));
         this.viewmodel.Parent = Workspace.CurrentCamera;
 
@@ -168,18 +198,7 @@ export default class weaponCore extends sohk.sohkComponent {
             let a = new Instance("Animation");
             a.AnimationId = v;
             a.Parent = temp;
-            if (i === 'idle') {
-                this.animations['idle'] = this.viewmodel.controller.animator.LoadAnimation(a);
-            }
-            if (i === 'swing') {
-                this.animations['swing'] = this.viewmodel.controller.animator.LoadAnimation(a);
-            }
-            if (i === 'reload') {
-                this.animations['reload'] = this.viewmodel.controller.animator.LoadAnimation(a);
-            }
-            if (i === 'equip') {
-                this.animations['equip'] = this.viewmodel.controller.animator.LoadAnimation(a);
-            }
+            this.animations[i] = this.viewmodel.controller.animator.LoadAnimation(a)
         }
 
         let conn = UserInputService.InputBegan.Connect((input, gp) => {
@@ -198,6 +217,19 @@ export default class weaponCore extends sohk.sohkComponent {
 
         this.viewmodel.Parent = undefined;
         temp.Destroy();
+        coroutine.wrap(() => {
+            task.wait(1);
+            if (this.isAGun) {
+                const ammoThread = Threading.Recursive(() => {
+                    let [ammo, maxAmmo, ammoOverload, reserve] = this.calls.requestAmmo.InvokeServer();
+                    this.ammo = ammo;
+                    this.maxAmmo = maxAmmo;
+                    this.ammoOverload = ammoOverload;
+                    this.reserve = reserve;
+                }, .25);
+                ammoThread.start();
+             }
+        })()
     }
     mountSight(sight: sightcore) {
         this.sight = sight;
@@ -206,9 +238,33 @@ export default class weaponCore extends sohk.sohkComponent {
     equip() {
         this.equipped = true;
         this.viewmodel.Parent = this.ctx.camera;
-        if (this.animations.equip) {
-            this.animations.equip.Play();
-        }
+        this.equipping = true;
+        coroutine.wrap(() => {
+            this.vmOffset.Value = new CFrame(0, -5, 0).mul(CFrame.Angles(math.rad(90), 0, 0))
+            let t = TweenService.Create(this.vmOffset, new TweenInfo(.2), {
+                Value: new CFrame(),
+            })
+            t.Play();
+            task.wait(.1);
+            if (this.animations.equip) {
+                this.animations.equip.Play();
+                if (this.isAGun) {
+                    let c2 = this.animations.equip.GetMarkerReachedSignal('bolt_out').Connect(() => {
+                        this.viewmodel.audio.boltback.Play();
+                    })
+                    let c1 = this.animations.equip.GetMarkerReachedSignal('bolt_in').Connect(() => {
+                        this.viewmodel.audio.boltforward.Play();
+                    })
+                    task.wait(this.animations.equip.Length);
+                    c1.Disconnect();
+                    c2.Disconnect();
+                }
+                else {
+                    task.wait(this.animations.equip.Length);
+                }
+            }
+            this.equipping = false;
+        })()
     }
     unequip() {
         this.equipped = false;
@@ -241,9 +297,10 @@ export default class weaponCore extends sohk.sohkComponent {
     }
     reload() {
         if (this.slotType === 'bomb') return;
+        if (this.reserve === 0) return;
+        if (this.equipping) return;
         if (tick() - this.lastReload < reloadExhaust) return;
-        if (this.ctx.interactions.currentAmmo >= this.ctx.interactions.currentMaxAmmo) return;
-        this.remotes.reload.FireServer();
+        if (this.ammo >= this.maxAmmo + this.ammoOverload) return;
         this.ctx.reloading = true;
         if (this.animations.reload) {
             this.animations.reload.Play();
@@ -267,6 +324,7 @@ export default class weaponCore extends sohk.sohkComponent {
         }
         task.wait(this.reloadLength);
         if (!this.ctx.reloading) return;
+        this.remotes.reload.FireServer();
         this.lastReload = tick();
         this.ctx.reloading = false;
     }
@@ -281,6 +339,9 @@ export default class weaponCore extends sohk.sohkComponent {
         }
     }
     recoilVM() {
+        if (this.animations.fire) {
+            this.animations.fire.Play();
+        }
         let rng = new Random();
         this.ctx.springs.viewModelRecoil.shove(new Vector3(
             this.viewModelRecoil.x, this.viewModelRecoil.y, this.viewModelRecoil.z
@@ -296,10 +357,19 @@ export default class weaponCore extends sohk.sohkComponent {
         this.ctx.crosshair.pushRecoil(3, .5);
     }
     fire() {
+        if (this.equipping) return;
         if (this.slotType === 'bomb') return;
         if (this.ctx.reloading) return;
         if (this.isAGun) {
-            if (this.ctx.interactions.currentAmmo <= 0) return;
+            if (this.ammo <= 0) {
+                if (this.reserve > 0) {
+                    this.reload();
+                    return;
+                }
+                else {
+                    return;
+                }
+            };
             if (this.fireMode === this.fireModes.indexOf('burst 2') || this.fireMode === this.fireModes.indexOf('burst 3')) {
                 if (tick() - this.lastshot < (60 / this.burstFireRate)) return;
             }
@@ -310,7 +380,7 @@ export default class weaponCore extends sohk.sohkComponent {
                 this.mousedown = false;
             }
             if (this.fireMode === this.fireModes.indexOf('burst 3')) {
-                let ca = this.ctx.interactions.currentAmmo;
+                let ca = this.ammo;
                 for (let i = 0; i <= 2; i++) {
                     if (!this.mousedown) break;
                     if (i >= ca) break;
@@ -336,7 +406,7 @@ export default class weaponCore extends sohk.sohkComponent {
                 return;
             }
             if (this.fireMode === this.fireModes.indexOf('burst 2')) {
-                let ca = this.ctx.interactions.currentAmmo;
+                let ca = this.ammo;
                 for (let i = 0; i <= 1; i++) {
                     if (i >= ca) break;
                     this.ctx.springs.recoil.shove(new Vector3(-this.recoil.x, this.recoil.y, 0).div(1).mul(System.process.deltatime * 60));
@@ -360,23 +430,26 @@ export default class weaponCore extends sohk.sohkComponent {
                 }
                 return;
             }
-            this.ctx.springs.recoil.shove(new Vector3(-this.recoil.x, this.recoil.y, 0).div(1).mul(System.process.deltatime * 60));
-            this.recoilVM();
-            this.lastshot = tick();
-            this.viewmodel.audio.fire.Play();
-            let effectorigin = this.viewmodel.barrel.Position;
-            let direction = this.ctx.camera.CFrame.LookVector;
-            let model = ReplicatedStorage.FindFirstChild('bullet_trail')?.Clone() as BasePart;
-            model.Parent = Workspace;
-            model.Position = effectorigin;
-            let trail = model.FindFirstChild('trail') as Trail;
-            model.CanCollide = false;
-            model.CanTouch = false;
-            model.Anchored = false;
-            model.ApplyImpulse(direction.mul(1000));
-            Debris.AddItem(model, 3);
-    
-            this.remotes.fire.FireServer(this.ctx.camera.CFrame.Position, this.ctx.camera.CFrame.LookVector);
+            if (this.fireMode === this.fireModes.indexOf('auto')) {
+                this.ctx.springs.recoil.shove(new Vector3(-this.recoil.x, this.recoil.y, 0).div(1).mul(System.process.deltatime * 60));
+                this.recoilVM();
+                this.lastshot = tick();
+                this.viewmodel.audio.fire.Play();
+                let effectorigin = this.viewmodel.barrel.Position;
+                let direction = this.ctx.camera.CFrame.LookVector;
+                let trace = new tracer(effectorigin, direction, 1.5, new Color3(0, 1, 1));
+                /*
+                let model = ReplicatedStorage.FindFirstChild('bullet_trail')?.Clone() as BasePart;
+                model.Parent = Workspace;
+                model.Position = effectorigin;
+                let trail = model.FindFirstChild('trail') as Trail;
+                model.CanCollide = false;
+                model.CanTouch = false;
+                model.Anchored = false;
+                model.ApplyImpulse(direction.mul(1000));
+                Debris.AddItem(model, 3);*/
+                this.remotes.fire.FireServer(this.ctx.camera.CFrame.Position, this.ctx.camera.CFrame.LookVector);
+            }
         }
         else if (this.isAMelee) {
             if (tick() - this.lastStab < this.knifeDelay) return;
@@ -393,10 +466,22 @@ export default class weaponCore extends sohk.sohkComponent {
         }
     }
     update() {
-        if(this.animations.idle && !this.animations.idle.IsPlaying) {
+        if (this.ammo === 0 && this.animations.empty) {
+            if (this.animations.idle) {
+                this.animations.idle.Stop();
+            }
+            if (!this.animations.empty.IsPlaying) {
+               this.animations.empty.Play(); 
+            }
+        }
+        else if(this.animations.idle && !this.animations.idle.IsPlaying) {
+            if (this.animations.empty) {
+                this.animations.empty.Stop();
+            }
+
             this.animations.idle.Play();
         }
-        if (this.mousedown) {
+        if (this.mousedown && this.equipped && !this.equipping) {
             this.fire();
         }
     }

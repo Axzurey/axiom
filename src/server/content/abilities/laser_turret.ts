@@ -7,12 +7,14 @@ export default class laser_turret extends ability_Core {
         super(client, charclass);
         this.init();
     }
-    amount = 1;
+    amount = 2;
+    slot: 'primary' | 'secondary' = 'secondary';
     targetPosition: Vector3 = new Vector3();
     target: boolean = false;
     lookVector: Vector3 = new Vector3();
     fov: number = 75;
     range: number = 50;
+    activationSequence = false;
     searchForTarget(pos: Vector3) {
         this.target = false;
         Players.GetPlayers().forEach((v) => {
@@ -46,7 +48,9 @@ export default class laser_turret extends ability_Core {
         let model = ReplicatedStorage.FindFirstChild('abilities')?.FindFirstChild('laser_turret')?.Clone() as Model;
         model.SetPrimaryPartCFrame(cf);
         model.Parent = Workspace.FindFirstChild("world");
-        this.amount --;
+        this.superStartActivation();
+        this.superToggleActive(true);
+        this.superDeductAmount();
         let [_cf, size] = model.GetBoundingBox();
         let reg = Workspace.GetPartBoundsInBox(cf, size);
         let touching = false;
@@ -56,6 +60,10 @@ export default class laser_turret extends ability_Core {
         })
         //if (touching) return;
         let conn = RunService.Heartbeat.Connect((dt) => {
+            if (!this.alive) {
+                conn.Disconnect();
+                return;
+            }
             if (this.target) {
                 
             }
@@ -63,5 +71,6 @@ export default class laser_turret extends ability_Core {
                 this.searchForTarget(model.GetPrimaryPartCFrame().Position);
             }
         });
+        //when destroyed, super start cooldown, super toggle active false;
     }
 }
