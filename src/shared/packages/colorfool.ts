@@ -16,7 +16,7 @@ namespace colorfool {
              * the delay between creating effects(lower = more expensive)
              */
             delay: number = .25;
-            growVector: types.normalVector = new Vector3(-1, 1, 1);
+            growVector: types.normalVector = new Vector3(1, 1, 1);
             cloneMaterial: Enum.Material = Enum.Material.Neon;
             cloneColor: Color3 | types.cloneColorType = Color3.fromRGB(69, 0, 255);
             targetSize: number = 15;
@@ -52,6 +52,7 @@ namespace colorfool {
                                     this.activeFloaters.remove(t);
                                 }
                                 floater.Destroy();
+                                return;
                             }
                             t += this.growRate * dt * 60;
                             floater.Size = originalSize.add(this.growVector.mul(t));

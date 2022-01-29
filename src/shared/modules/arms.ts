@@ -1,6 +1,10 @@
 import { ReplicatedStorage, RunService, TweenService } from "@rbxts/services";
 import interpolations from "shared/functions/interpolations";
 import fps_framework_types from "shared/types/fps";
+import { mathf } from "./System";
+
+const left_rest = new CFrame(-1, -.5, .5);
+const right_rest = new CFrame(0, -.5, .5);
 
 export default class arms {
     viewmodel: fps_framework_types.arm_viewmodel;
@@ -15,18 +19,26 @@ export default class arms {
         });
         t.Play();*/
         let t = 0;
-        let origin = new CFrame(-2, -2, -.5);
+        let oTra = selected.Transform;
         let c = RunService.Stepped.Connect((_, dt) => {
-            t += 1 / 2 * dt;
-            if (t >= 4) {
+            t += 2 * dt;
+            if (t > 1) {
+                c.Disconnect();
                 return;
             }
-            let direction = camera.CFrame.Position.add(CFrame.lookAt(camera.CFrame.Position, position).LookVector.mul(5000));
-            let rf = viewmodel.rootpart.CFrame;
-            let offset = (rf.sub(rf.Position)).Inverse();
-            let d = interpolations.interpolate(t, 0, 1, "quadInOut");
-            
-            selected.Transform = offset.mul(CFrame.lookAt(new Vector3(), direction)).mul(origin)
+            let f = left_rest;
+
+            f = viewmodel.rootpart.CFrame.ToWorldSpace(f);
+            let target = CFrame.lookAt(f.Position, position);
+            let final = viewmodel.rootpart.CFrame.ToObjectSpace(target);
+
+            let camLook = viewmodel.rootpart.CFrame.VectorToObjectSpace(camera.CFrame.LookVector);
+            let pointLook = final.LookVector;
+            let dot = -camLook.Dot(pointLook);
+
+            let goal = final.mul(new CFrame(camera.CFrame.LookVector.mul(-viewmodel.leftArm.Size.Z * (dot + 1))));
+            selected.Transform = selected.Transform.Lerp(goal, math.clamp(t * 2, 0, 1))
+
         });
         print('playing tween');
     }

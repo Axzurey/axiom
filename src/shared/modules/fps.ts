@@ -668,6 +668,7 @@ export default class fps_framework extends sohk.sohkComponent {
                 t += 1 * dt;
                 a1.WorldPosition = originPosition;
                 a2.WorldPosition = mathf.bezierQuadraticV3(t, originPosition, mid, targetPosition);
+                this.replicationService.remotes.act.FireServer('updateRappelRope', a2.WorldPosition);
                 if (t > 1) {
                     c.Disconnect();
                     this.enteringRappel = false;
@@ -771,15 +772,18 @@ export default class fps_framework extends sohk.sohkComponent {
                                 //origin = CFrame.lookAt(bezier01, target.Position.add(target.CFrame.LookVector.mul(20)));
                                 //this.character.SetPrimaryPartCFrame(origin);
                             }
-                            if (t01 >= .5) {
-                                let bezier01 = mathf.lerpV3(origin.Position, firstP, math.clamp(t01, 0, 1));
-                                let bezier = mathf.bezierQuadraticV3(t, bezier01, mid, endPosition);
+                            if (t01 >= 0) {
+                                let cald = interpolations.interpolate(t, 0, 1, 'quadIn')
+                                let cald2 = interpolations.interpolate(t, 0, 1, 'quadOut')
+                                let bezier01 = mathf.lerpV3(origin.Position, firstP, math.clamp(cald2, 0, 1));
+                                let bezier = mathf.bezierQuadraticV3(cald, bezier01, mid, endPosition);
                                 mathf.plotInWorld(bezier)
                                 this.character.SetPrimaryPartCFrame(CFrame.lookAt(bezier, target.Position.add(target.CFrame.LookVector.mul(20))));
                             }
                             else {
                                 if (setFirst) return;
-                                let bezier01 = mathf.lerpV3(origin.Position, firstP, t01)
+                                let cald = interpolations.interpolate(t01, 0, 1, 'quadOut')
+                                let bezier01 = mathf.lerpV3(origin.Position, firstP, cald)
                                 mathf.plotInWorld(bezier01, Color3.fromRGB(125, 150, 0))
                                 this.character.SetPrimaryPartCFrame(CFrame.lookAt(bezier01, target.Position.add(target.CFrame.LookVector.mul(20))));
                             }
@@ -926,7 +930,7 @@ export default class fps_framework extends sohk.sohkComponent {
 
                 let t = 0;
 
-                let closest = mathf.closestPointOnPart(hit, origin.Position).add(this.camera.CFrame.RightVector.mul(3));
+                let closest = mathf.closestPointOnPart(hit, origin.Position).add(this.camera.CFrame.RightVector.mul(-1));
                 let equipped = this.getEquipped();
                 if (equipped) {
                     mathf.plotInWorld(closest, new Color3(1, 1, 0))
@@ -1004,7 +1008,7 @@ export default class fps_framework extends sohk.sohkComponent {
             })
         }
         else if (equipped && equipped.module.viewmodel) {
-
+            
             let vm: fps_framework_types.viewmodel = equipped.module.viewmodel;
             let env = equipped.module;
             let cf = vm.offsets.idle.Value;
@@ -1037,24 +1041,13 @@ export default class fps_framework extends sohk.sohkComponent {
                 currentMovementState = datatypes.movementState.falling
             }
             this.replicationService.remotes.act.FireServer('updateMovementState', currentMovementState)
-            /*
-            let fluct = this.sneaking? 2: 5;
-            
-            this.offsets.aimOscillation = this.offsets.aimOscillation.Lerp(
-                this.aiming?
-                CFrame.Angles(0, 0, 
-                    this.renderService.flux(fluct, .1) * (moveDirection.Magnitude === 0? 0: 1)
-                        * (moveDirection.X !== 0? moveDirection.X: 1)
-                    ):
-                    CFrame.Angles(0, 0, 0)
-            , .1)*/
 
             const oscMVMT = this.cameraService.bobLemnBern(
                 this.rappelling? 3 : this.humanoid.WalkSpeed / 3 * env.bobSpeedModifier,
                 this.rappelling? .15: this.humanoid.WalkSpeed / 50 * env.bobIntensityModifier);
             
             this.offsets.movementOscillation = this.offsets.movementOscillation.Lerp(
-                /*this.aiming ||*/ moveDirection.Magnitude === 0? new CFrame(): 
+                moveDirection.Magnitude === 0? new CFrame(): 
                 new CFrame(new Vector3(oscMVMT[1], oscMVMT[0], 0).mul(this.aiming? 0.1: 1)),
                 .1
             )
@@ -1088,16 +1081,6 @@ export default class fps_framework extends sohk.sohkComponent {
                 }
                 let rappelvel = 10;
                 let org = this.character.GetPrimaryPartCFrame();
-                
-                /*
-                let looker = this.rappelWall.CFrame.LookVector;
-                let similarity = looker.Dot(this.camera.CFrame.LookVector);
-                let flip = 1;
-                print(similarity, looker);
-                if (similarity < -1 / 2) {
-                    flip = -1;
-                }
-                mvDT = new Vector3(mvDT.X * flip, mvDT.Y, mvDT.Z);*/
 
                 let ignore = new RaycastParams(); //for detecting if there's anything above or below them
                 ignore.FilterDescendantsInstances = [this.camera, this.character];
@@ -1142,12 +1125,12 @@ export default class fps_framework extends sohk.sohkComponent {
             if (this.vaulting) {
                 rootpart.Anchored = true;
             }
-            else {
+            else if (!this.rappelling && !this.exitingRappel && !this.enteringRappel) {
                 rootpart.Anchored = false;
             }
 
             let [rx, ry, rz] = this.camera.CFrame.ToOrientation();
-
+            //setting things to cam causes lag;
             vm.SetPrimaryPartCFrame(new CFrame(this.camera.CFrame.Position)
                 .mul(env.vmOffset.Value)
                 .mul(this.offsets.stance.Value)
@@ -1161,7 +1144,6 @@ export default class fps_framework extends sohk.sohkComponent {
                 .mul(this.offsets.gunLean.Value)
                 .mul(this.offsets.cameraMovementTilt)
             );
-            
 
             UserInputService.MouseIconEnabled = false;
             

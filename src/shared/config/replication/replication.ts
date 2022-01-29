@@ -10,7 +10,9 @@ namespace replication {
     const stateCache: Map<Model, datatypes.movementState> = new Map();
     const characterCache: Map<Model, Record<string, AnimationTrack>> = new Map();
     const characterLeanCache: Map<Model, {value: NumberValue}> = new Map();
-    const rappelInfo: Map<Model, {ropeContainer: Part, update: RBXScriptConnection}> = new Map();
+    const rappelInfo: Map<Model, {ropeContainer: Part & {
+        rope: RopeConstraint, a1: Attachment, a2: Attachment
+    }}> = new Map();
 
     export type action =
         'toggleReload'| 'setCFrame'| 'toggleAim'| 'toggleStance'| 'toggleRappelling'| 'updateRappelRope' |
@@ -53,8 +55,14 @@ namespace replication {
     }
     
     export const replicationFunctions: Partial<Record<action, (...args: any[]) => void>> = {
+        updateRappelRope: (character: Model, position: Vector3) => {
+            let l = rappelInfo.get(character);
+            if (!l) return;
+            l.ropeContainer.a1.WorldPosition = character.GetPrimaryPartCFrame().Position;
+            l.ropeContainer.a2.WorldPosition = position;
+        },
         toggleRappelling: (character: Model, t: boolean) => {
-            if (t) {/*
+            if (t) {
                 let p1 = new Instance("Part");
                 p1.Size = new Vector3();
                 p1.Anchored = true;
@@ -63,38 +71,28 @@ namespace replication {
                 p1.Parent = Workspace.FindFirstChild('ignore');
 
                 let a1 = new Instance('Attachment');
+                a1.Name = 'a1';
                 a1.Parent = p1;
 
                 let a2 = new Instance('Attachment');
+                a2.Name=  'a2';
                 a2.Parent = p1;
 
                 let rope = new Instance("RopeConstraint");
+                rope.Name = "rope";
                 rope.Length = 0;
                 rope.Visible = true;
                 rope.Attachment0 = a1;
                 rope.Attachment1 = a2;
                 rope.Parent = p1;
 
-                let t = 0;
-                
-                let cx = RunService.RenderStepped.Connect((dt) => {
-                    t += 1 * dt;
-                    a1.WorldPosition = originPosition;
-                    a2.WorldPosition = mathf.bezierQuadraticV3(t, originPosition, mid, targetPosition);
-                    if (t > 1) {
-                        cx.Disconnect();
-                    }
-                })
-
-                let c = RunService.RenderStepped.Connect(() => {
-
-                })
-                rappelInfo.set(character, {ropeContainer: p1, update: c})*/
+                rappelInfo.set(character, {ropeContainer: p1 as Part & {
+                    rope: RopeConstraint, a1: Attachment, a2: Attachment
+                }})
             }
             else {
                 let l = rappelInfo.get(character);
                 if (!l) return;
-                l.update.Disconnect();
                 l.ropeContainer.Destroy();
             }
         },
@@ -205,8 +203,8 @@ namespace replication {
                 handle.Destroy();
             }
         },
-        setCFrame: (character: Model, cframe: CFrame) => {
-            character.SetPrimaryPartCFrame(cframe);
+        setCFrame: (character: Model, cframe: CFrame) => {/*
+            character.SetPrimaryPartCFrame(cframe);*/
         },
         setCamera: (character: Model, v3: Vector3) => {
             let neck = character.FindFirstChild('Head')?.FindFirstChild('Neck') as Motor6D;

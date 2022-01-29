@@ -46,6 +46,7 @@ export default class characterReplicator extends sohk.sohkComponent {
             return false;
         }
         else if (position.Y > maxHeight || position.Y < minHeight) {
+            print('y not above max height')
             return false;
         }
 
