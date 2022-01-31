@@ -101,7 +101,12 @@ export default class weaponCore extends sohk.sohkComponent {
                     ignore: ignore
                 })
                 if (result) {
-                    let canpen = worldData.penetratableObjects[result.Instance.Name as keyof typeof worldData.penetratableObjects];
+                    let canpen = 0;
+                    for (const [i, v] of pairs(worldData.penetratableObjects)) {
+                        if (result.Instance.Name.find(i)[0]) {
+                            canpen = v;
+                        }
+                    }
                     let backr = this.hitscanService.scanForHitAsync({
                         position: result.Position,
                         direction: CFrame.lookAt(result.Position, origin).LookVector,
@@ -219,7 +224,6 @@ export default class weaponCore extends sohk.sohkComponent {
         if (tick() - this.lastReload < this.reloadCooldown) return;
         if (this.reserve <= 0) return;
 
-        this.lastReload = tick();
         /*let length = this.reloadLength;
         if (this.ammo <= 0) {
             length = this.fullReloadLength;
@@ -242,6 +246,7 @@ export default class weaponCore extends sohk.sohkComponent {
             }
         }
         this.reloadCancelled = false;
+        this.lastReload = tick();
         this.reloading = false;
         coroutine.wrap(() => {
             this.replicationService.remotes.requestPlayerAmmo.InvokeClient(this.client, this.ammo, this.maxAmmo + this.ammoOverload, this.reserve);

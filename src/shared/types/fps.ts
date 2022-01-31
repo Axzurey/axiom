@@ -1,4 +1,5 @@
 import ability_core from "shared/content/abilitycore";
+import blank_arms from "shared/content/basic/blank_arms";
 import weaponCore from "shared/content/weaponCore";
 
 namespace fps_framework_types {
@@ -23,6 +24,10 @@ namespace fps_framework_types {
         },
         bomb: {
             module: weaponCore,
+            equipped: boolean,
+        },
+        blank: {
+            module: blank_arms,
             equipped: boolean,
         }
     }

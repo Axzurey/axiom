@@ -4,6 +4,7 @@ import bulletHoleMap from "./content/mapping/bulletHoleMap";
 import matchService from "./services/matchservice";
 
 namespace minerva {
+
     export const allowedOverheal: number = 50;
 
     export const reloadLengths = {

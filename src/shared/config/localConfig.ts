@@ -1,7 +1,8 @@
 const localConfig = {
     fov: 70,
-    sensitivity: .6,
-    aimSensitivity: .4,
+    sensitivityX: .75,
+    sensitivityY: .75,
+    aimSensitivityMultiplier: .5,
 }
 
 export = localConfig;

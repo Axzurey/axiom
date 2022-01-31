@@ -36,6 +36,8 @@ export default class weaponCore extends sohk.sohkComponent {
         swing?: AnimationTrack,
     } = {};
 
+    extraAnimations: Record<string, AnimationTrack> = {};
+
     mousedown: boolean = false;
     equipped: boolean = false;
 
@@ -74,6 +76,7 @@ export default class weaponCore extends sohk.sohkComponent {
 
     isAMelee: boolean = false;
     isAGun: boolean = true;
+    isBlank: boolean = false;
 
     weightMultiplier: number = 1.2;
 
@@ -271,6 +274,7 @@ export default class weaponCore extends sohk.sohkComponent {
         this.viewmodel.Parent = undefined;
     }
     toggleInspect(t: boolean) {
+        if (this.isBlank) return;
         this.inspecting = t;
         if (this.slotType === 'bomb') return;
         if (t) {
@@ -285,6 +289,7 @@ export default class weaponCore extends sohk.sohkComponent {
         }
     }
     switchFireMode() {
+        if (this.isBlank) return;
         if (this.slotType === 'bomb') return;
         if (tick() - this.lastFireModeSwitch < this.fireModeSwitchCooldown) return;
         if (this.fireMode >= this.fireModes.size() - 1) {
@@ -296,6 +301,7 @@ export default class weaponCore extends sohk.sohkComponent {
         this.remotes.firemode.FireServer();
     }
     reload() {
+        if (this.isBlank) return;
         if (this.slotType === 'bomb') return;
         if (this.reserve === 0) return;
         if (this.equipping) return;
@@ -329,6 +335,7 @@ export default class weaponCore extends sohk.sohkComponent {
         this.ctx.reloading = false;
     }
     cancelReload() {
+        if (this.isBlank) return;
         if (this.slotType === 'bomb') return;
         if (this.remotes.cancelReload) {
            this.remotes.cancelReload.FireServer(); 
@@ -357,6 +364,7 @@ export default class weaponCore extends sohk.sohkComponent {
         this.ctx.crosshair.pushRecoil(3, .5);
     }
     fire() {
+        if (this.isBlank) return;
         if (this.equipping) return;
         if (this.slotType === 'bomb') return;
         if (this.ctx.reloading) return;
@@ -466,6 +474,7 @@ export default class weaponCore extends sohk.sohkComponent {
         }
     }
     update() {
+        if (this.isBlank) return;
         if (this.ammo === 0 && this.animations.empty) {
             if (this.animations.idle) {
                 this.animations.idle.Stop();

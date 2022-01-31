@@ -25,12 +25,17 @@ import clientService from "shared/services/clientService";
 import clientCamera from "shared/classes/clientCamera";
 import interpolations from "shared/functions/interpolations";
 import arms from "./arms";
+import cameraController, { cameraConfig } from "./cameraController";
+import blank_arms from "shared/content/basic/blank_arms";
 
 export default class fps_framework extends sohk.sohkComponent {
     camera: Camera = Workspace.CurrentCamera as Camera;
     client = Players.LocalPlayer;
     character = this.client.Character || (this.client.CharacterAdded.Wait()[0]);
     humanoid = this.character.WaitForChild("Humanoid") as Humanoid;
+
+    cameraController = new cameraController(this.camera, this.character.WaitForChild('HumanoidRootPart') as BasePart);
+
     reloading: boolean = false;
     aiming: boolean = false;
     toAim: boolean = false;
@@ -128,6 +133,10 @@ export default class fps_framework extends sohk.sohkComponent {
         bomb: {
             module: new bomb(this),
             equipped: false,
+        },
+        blank: {
+            module: new blank_arms(this),
+            equipped: false,
         }
     }
     Abilities: fps_framework_types.abilityloadout = {
@@ -174,22 +183,20 @@ export default class fps_framework extends sohk.sohkComponent {
             }
         })
         RunService.BindToRenderStep('cameraLock', Enum.RenderPriority.Camera.Value + 200, (dt) => {
-            let [rx, ry, rz] = this.camera.CFrame.ToOrientation();
             if (this.rappelling && this.rappelWall) {
-                ry = math.clamp(math.deg(ry), -110, 110);
+                this.cameraController.maxAngleX = 110;
+                this.cameraController.minAngleX = -110;
             }
             else {
-                ry = math.deg(ry);
+                this.cameraController.maxAngleX = cameraConfig.unlimited;
+                this.cameraController.minAngleX = -cameraConfig.unlimited;
             }
             if (this.stance === -1) {
-                rx = math.clamp(math.deg(rx), -60, 90);
+                this.cameraController.minAngleY = -60
             }
             else {
-                rx = math.deg(rx);
+                this.cameraController.minAngleY = -80
             }
-            this.camera.CFrame = new CFrame(this.camera.CFrame.Position).mul(
-                CFrame.fromOrientation(math.rad(rx), math.rad(ry), rz)
-            )
         })
         matchService.playerDropsBomb.connect(() => {
             this.iHaveBomb = false;
@@ -991,6 +998,11 @@ export default class fps_framework extends sohk.sohkComponent {
     }
     update(dt: number) {
         let equipped = this.getEquipped();
+        this.character.GetDescendants().forEach((v) => {
+            if (v.IsA('BasePart')) {
+                v.Transparency = 1;
+            }
+        })
         
         let rootpart = this.character.FindFirstChild("HumanoidRootPart") as BasePart;
         replication.replicate(this, 'setCamera', rootpart.CFrame.ToObjectSpace(this.camera.CFrame).LookVector);
@@ -1129,9 +1141,33 @@ export default class fps_framework extends sohk.sohkComponent {
                 rootpart.Anchored = false;
             }
 
-            let [rx, ry, rz] = this.camera.CFrame.ToOrientation();
+            //let [rx, ry, rz] = this.camera.CFrame.ToOrientation();
             //setting things to cam causes lag;
+            /*
             vm.SetPrimaryPartCFrame(new CFrame(this.camera.CFrame.Position)
+                .mul(env.vmOffset.Value)
+                .mul(this.offsets.stance.Value)
+                .mul(CFrame.fromOrientation(rx, ry, rz))
+                .mul(cf)
+                .mul(new CFrame(recoilvmVector))
+                .mul(l)
+                //.mul(this.offsets.aimOscillation)
+                .mul(this.offsets.movementTilt)
+                .mul(this.offsets.movementOscillation)
+                .mul(this.offsets.gunLean.Value)
+                .mul(this.offsets.cameraMovementTilt)
+            );*/
+
+            UserInputService.MouseIconEnabled = false;
+
+            let [cameraOrigin, cameraCFrame] = this.cameraController.render(
+                [this.offsets.stance.Value],
+                [l, CFrame.Angles(math.rad(recoil.Y), math.rad(recoil.X), 0), this.offsets.movementOscillation]
+            )
+
+            let [rx, ry, rz] = cameraOrigin.ToOrientation();
+
+            vm.SetPrimaryPartCFrame(new CFrame(cameraOrigin.Position)
                 .mul(env.vmOffset.Value)
                 .mul(this.offsets.stance.Value)
                 .mul(CFrame.fromOrientation(rx, ry, rz))
@@ -1145,14 +1181,13 @@ export default class fps_framework extends sohk.sohkComponent {
                 .mul(this.offsets.cameraMovementTilt)
             );
 
-            UserInputService.MouseIconEnabled = false;
-            
+            /*
             this.camera.CFrame = new CFrame(this.camera.CFrame.Position)
                 .mul(this.offsets.stance.Value)
                 .mul(CFrame.fromOrientation(rx, ry, rz))
                 .mul(l)
                 .mul(CFrame.Angles(math.rad(recoil.Y), math.rad(recoil.X), 0))
-                .mul(this.offsets.movementOscillation)
+                .mul(this.offsets.movementOscillation)*/
             
             let mod1 = this.pronePlaying? 0: 1;
             let mod2 = this.stance === 0? .5: 1;
@@ -1173,8 +1208,12 @@ export default class fps_framework extends sohk.sohkComponent {
             
             let zoom = equipped.module.sight?.zoom || 1;
 
-            UserInputService.MouseDeltaSensitivity = mathf.lerp(localConfig.sensitivity, localConfig.aimSensitivity, this.offsets.aimSensitivityMultiplier.Value);
+            let sensX = mathf.lerp(localConfig.sensitivityX, localConfig.sensitivityX * localConfig.aimSensitivityMultiplier, this.offsets.aimSensitivityMultiplier.Value);
+            let sensY = mathf.lerp(localConfig.sensitivityY, localConfig.sensitivityY * localConfig.aimSensitivityMultiplier, this.offsets.aimSensitivityMultiplier.Value);
             
+            this.cameraController.sensitivityMultiplierX = sensX;
+            this.cameraController.sensitivityMultiplierY = sensY;
+
             this.camera.FieldOfView = mathf.lerp(localConfig.fov, localConfig.fov / zoom, this.offsets.zoomFovMultiplier.Value);
             
             equipped.module.update();
