@@ -7,6 +7,9 @@ import sightcore from "./sightcore";
 import sightsMapping from "./mapping/sights";
 import tracer from "shared/classes/tracer";
 import interpolations from "shared/functions/interpolations";
+import bullet from "shared/classes/bullet";
+import minerva from "shared/minerva";
+import worldData from "shared/worlddata";
 
 interface animationIds {
     idle?: string,
@@ -22,6 +25,7 @@ interface animationIds {
 const reloadExhaust = .55; //make this dynamic based on ping?
 
 export default class weaponCore extends sohk.sohkComponent {
+    void: boolean = false;
     name: string = 'unknown gun'
     ctx: fps_framework;
     viewmodel: viewmodel;
@@ -47,10 +51,12 @@ export default class weaponCore extends sohk.sohkComponent {
 
     reloadLength: number = 1.5;
 
+    penetration: number = 3;
+
     viewModelRecoil: {x: number, y: number, z: number, rUp: number} = {
         x: 0,
         y: 0,
-        z: .2,
+        z: .8,
         rUp: 0
     }
 
@@ -92,13 +98,21 @@ export default class weaponCore extends sohk.sohkComponent {
     fireModeSwitchCooldown: number = .75;
     skin: string;
 
-    recoil: {x: number, y: number} = {x: 1, y: .9};
+    recoil: {x: number, y: number} = {x: 5, y: 9};
+
+    recoilPattern: {x: number, y: number}[] = [
+        {x: 5, y: 9}, {x: -3, y: 9}, {x: 5, y: 9}, {x: -5, y: 10}, {x: -8, y: 12}, {x: 8, y: 12},
+        {x: 11, y: 14}, {x: -10, y: 16}, {x: 12, y: 14}
+    ];
+    recoilIndex: number = 0;
+    lastRecoil: number = tick();
+    recoilRegroupTime: number = 1.2;
 
     sight: sightcore | undefined = undefined;
 
     lastReload: number = tick();
 
-    slotType: 'primary' | 'melee' | 'bomb' | 'special' | 'secondary';
+    slotType: 'primary' | 'melee' | 'bomb' | 'special' | 'secondary' | 'extra1';
 
     vmOffset: CFrameValue = new Instance("CFrameValue");
 
@@ -110,7 +124,7 @@ export default class weaponCore extends sohk.sohkComponent {
     constructor(ctx: fps_framework, data: {
         name: string,
         animationIds: animationIds,
-        slotType: 'primary' | 'secondary' | 'melee' | 'bomb' | 'special',
+        slotType: 'primary' | 'secondary' | 'melee' | 'bomb' | 'special' | 'extra1',
         skin: string,
         attachments?: {sight?: string},
     }) {
@@ -186,8 +200,10 @@ export default class weaponCore extends sohk.sohkComponent {
                 remotes: Record<string, RemoteEvent>,
                 calls: Record<string, RemoteFunction>,
             }
-            this.remotes = r.remotes;
-            this.calls = r.calls;
+            if (r) {
+                this.remotes = r.remotes;
+                this.calls = r.calls;  
+            }
         }
 
         this.viewmodel.SetPrimaryPartCFrame(new CFrame(0, -10000, 0));
@@ -239,6 +255,7 @@ export default class weaponCore extends sohk.sohkComponent {
         sight.mount(this.viewmodel);
     }
     equip() {
+        if (this.void) return;
         this.equipped = true;
         this.viewmodel.Parent = this.ctx.camera;
         this.equipping = true;
@@ -274,6 +291,7 @@ export default class weaponCore extends sohk.sohkComponent {
         this.viewmodel.Parent = undefined;
     }
     toggleInspect(t: boolean) {
+        if (this.void) return;
         if (this.isBlank) return;
         this.inspecting = t;
         if (this.slotType === 'bomb') return;
@@ -289,6 +307,7 @@ export default class weaponCore extends sohk.sohkComponent {
         }
     }
     switchFireMode() {
+        if (this.void) return;
         if (this.isBlank) return;
         if (this.slotType === 'bomb') return;
         if (tick() - this.lastFireModeSwitch < this.fireModeSwitchCooldown) return;
@@ -301,6 +320,7 @@ export default class weaponCore extends sohk.sohkComponent {
         this.remotes.firemode.FireServer();
     }
     reload() {
+        if (this.void) return;
         if (this.isBlank) return;
         if (this.slotType === 'bomb') return;
         if (this.reserve === 0) return;
@@ -335,6 +355,7 @@ export default class weaponCore extends sohk.sohkComponent {
         this.ctx.reloading = false;
     }
     cancelReload() {
+        if (this.void) return;
         if (this.isBlank) return;
         if (this.slotType === 'bomb') return;
         if (this.remotes.cancelReload) {
@@ -349,21 +370,47 @@ export default class weaponCore extends sohk.sohkComponent {
         if (this.animations.fire) {
             this.animations.fire.Play();
         }
-        let rng = new Random();
         this.ctx.springs.viewModelRecoil.shove(new Vector3(
             this.viewModelRecoil.x, this.viewModelRecoil.y, this.viewModelRecoil.z
         ));
-        coroutine.wrap(() => {
-            let f1 = this.viewmodel.barrel.WaitForChild("muzzle").WaitForChild("f1") as ParticleEmitter;
-            let f2 = this.viewmodel.barrel.WaitForChild("muzzle").WaitForChild("f2") as ParticleEmitter;
-            let f = this.viewmodel.barrel.WaitForChild("muzzle").WaitForChild("flash") as ParticleEmitter;
-            f.Emit(1);
-            f1.Emit(3);
-            f2.Emit(1);
-        })()
+
+        let f1 = this.viewmodel.barrel.WaitForChild("muzzle").WaitForChild("f1") as ParticleEmitter;
+        let f2 = this.viewmodel.barrel.WaitForChild("muzzle").WaitForChild("f2") as ParticleEmitter;
+        let f = this.viewmodel.barrel.WaitForChild("muzzle").WaitForChild("flash") as ParticleEmitter;
+        f.Emit(1);
+        f1.Emit(3);
+        f2.Emit(1);
+
+        if (tick() - this.lastRecoil >= this.recoilRegroupTime) {
+            this.recoilIndex = 0;
+        }
+        else {
+            this.recoilIndex ++;
+        }
+        this.lastRecoil = tick();
+
+        let recoilValue = this.recoilPattern[this.recoilIndex] || this.recoilPattern[this.recoilPattern.size() - 1];
+
+        this.ctx.springs.recoil.shove(new Vector3(-recoilValue.x / 25, recoilValue.y / 25, 0))
         this.ctx.crosshair.pushRecoil(3, .5);
     }
+    fireScan() {
+        const Bullet = new bullet({
+            onHit: (result) => {
+                return 0;
+            },
+            maxPenetration: this.penetration,
+            range: 999,
+            origin: this.ctx.camera.CFrame.Position,
+            direction: this.ctx.camera.CFrame.LookVector,
+            ignoreInstances: [this.ctx.character, this.ctx.camera],
+            ignoreNames: [...minerva.extractKeysFromDictionaries([worldData.explicitMetallic, worldData.explicitMetallic])],
+            ignorePlayers: [],
+            ignoreHumanoidRootPart: true,
+        })
+    }
     fire() {
+        if (this.void) return;
         if (this.isBlank) return;
         if (this.equipping) return;
         if (this.slotType === 'bomb') return;
@@ -392,7 +439,6 @@ export default class weaponCore extends sohk.sohkComponent {
                 for (let i = 0; i <= 2; i++) {
                     if (!this.mousedown) break;
                     if (i >= ca) break;
-                    this.ctx.springs.recoil.shove(new Vector3(-this.recoil.x, this.recoil.y, 0).div(1).mul(System.process.deltatime * 60));
                     this.recoilVM();
                     this.lastshot = tick();
                     this.viewmodel.audio.fire.Play();
@@ -417,7 +463,6 @@ export default class weaponCore extends sohk.sohkComponent {
                 let ca = this.ammo;
                 for (let i = 0; i <= 1; i++) {
                     if (i >= ca) break;
-                    this.ctx.springs.recoil.shove(new Vector3(-this.recoil.x, this.recoil.y, 0).div(1).mul(System.process.deltatime * 60));
                     this.recoilVM();
                     this.lastshot = tick();
                     this.viewmodel.audio.fire.Play();
@@ -439,7 +484,6 @@ export default class weaponCore extends sohk.sohkComponent {
                 return;
             }
             if (this.fireMode === this.fireModes.indexOf('auto')) {
-                this.ctx.springs.recoil.shove(new Vector3(-this.recoil.x, this.recoil.y, 0).div(1).mul(System.process.deltatime * 60));
                 this.recoilVM();
                 this.lastshot = tick();
                 this.viewmodel.audio.fire.Play();
@@ -474,6 +518,7 @@ export default class weaponCore extends sohk.sohkComponent {
         }
     }
     update() {
+        if (this.void) return;
         if (this.isBlank) return;
         if (this.ammo === 0 && this.animations.empty) {
             if (this.animations.idle) {
@@ -493,5 +538,8 @@ export default class weaponCore extends sohk.sohkComponent {
         if (this.mousedown && this.equipped && !this.equipping) {
             this.fire();
         }
+    }
+    destroy() {
+        this.void = true;
     }
 }

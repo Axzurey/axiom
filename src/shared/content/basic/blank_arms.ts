@@ -2,12 +2,15 @@ import fps_framework from "shared/modules/fps";
 import weaponCore from "../weaponCore";
 
 export default class blank_arms extends weaponCore {
+    isAGun = false;
+    isAMelee = false;
+    isBlank = true;
     constructor(ctx: fps_framework) {
         super(ctx, {
-            name: 'basic_arms',
+            name: 'viewmodel',
             animationIds: {},
             slotType: 'special',
-            skin: 'none',
+            skin: 'blank',
         });
     }
     setUpExtraAnimation(name: string, animationObject: Animation) {

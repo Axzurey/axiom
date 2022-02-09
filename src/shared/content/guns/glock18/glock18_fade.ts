@@ -20,7 +20,7 @@ export default class glock18_fade extends weaponCore {
                 attachments: attachments,
             }
         );
-        this.firerate = 1000;
+        this.firerate = 860;
         this.reloadLength = minerva.reloadLengths.glock18;
     }
 }

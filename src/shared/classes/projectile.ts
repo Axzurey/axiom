@@ -1,24 +1,18 @@
 import { Players, RunService, Workspace } from "@rbxts/services";
 
-interface projectileImpactResult {
-    characterHits: entityStructure[],
-    instanceHits: BasePart[],
-}
-
 interface projectileConfig {
-    onHit: (result: projectileImpactResult) => number,
+    onHit: () => void,
     onTerminated: () => void,
     instance: Model,
     velocity: number,
     direction: Vector3,
     origin: Vector3,
     gravity: Vector3,
-    explosionRadius: number,
-    maxDistance: number,
-    explodeAtMaxDistance?: boolean,
+    lifeTime: number,
     ignoreInstances: Instance[],
     ignoreNames?: string[],
     ignorePlayers?: Player[],
+    ignoreEverything?: boolean,
 }
 
 interface entityStructure {
@@ -26,89 +20,88 @@ interface entityStructure {
     player: Player | undefined,
 }
 
+/**
+ * 
+ * @param acceleration acceleration at the point of ***elapsedTime***
+ * @param initialVelocity self explanitory
+ * @param initialPosition self explanitory
+ * @param elapsedTime time since motion started
+ * @returns the vector that the projectile would be at for ***elapsedTime***
+ */
+function motion(acceleration: Vector3, initialVelocity: Vector3, initialPosition: Vector3, elapsedTime: number) {
+    let firstHalf = acceleration.mul(.5).mul(elapsedTime ** 2);
+    let secondHalf = initialVelocity.mul(elapsedTime);
+    return firstHalf.add(secondHalf).add(initialPosition);
+}
+
 export default class projectile {
-    private config: projectileConfig;
-    private getAllInExplosionRadius(position: Vector3, radius: number): [entityStructure[], BasePart[]] {
-        let overlap = new OverlapParams();
-        overlap.MaxParts = 999;
-        overlap.FilterDescendantsInstances = this.config.ignoreInstances;
-        let all = Workspace.GetPartBoundsInRadius(position, radius, overlap) as BasePart[];
-        let characters: entityStructure[] = [];
-        all.forEach((v, i) => {
-            if (this.config.ignoreNames && this.config.ignoreNames.indexOf(v.Name) !== -1) {
-                all.remove(i);
-                return;
-            };
-            if (v.Name === "HumanoidRootPart") {
-                let char = v.Parent as Model;
-                let player = Players.GetPlayerFromCharacter(char);
-                if (player && this.config.ignorePlayers && this.config.ignorePlayers.indexOf(player) !== -1) {
-                    return;
-                };
-                characters.push({character: char, player: player});
-                all.remove(i);
-            }
-        })
-        return [characters, all];
-    }
-    private explode(position: Vector3) {
-        let hits = this.getAllInExplosionRadius(position, this.config.explosionRadius);
-        this.config.onHit({
-            instanceHits: hits[1],
-            characterHits: hits[0],
-        });
+    config: projectileConfig;
+    alive: boolean = true;
+    terminate() {
+        this.alive = false;
     }
     constructor(config: projectileConfig) {
+        if (!config.instance.PrimaryPart) throw `instance doesn't have a primary part set`
         this.config = config;
         let t = 0;
-        let currentPosition = config.origin;
         let instance = config.instance;
-        let rs = RunService.Stepped.Connect((_, dt) => {
-            t += config.velocity * dt;
-
-            if (config.explodeAtMaxDistance && t > config.maxDistance) {
+        let rs = RunService.Heartbeat.Connect((dt) => {
+            t += 1 * dt;
+            if (!this.alive) {
                 rs.Disconnect();
-                this.explode(currentPosition);
+                config.onTerminated();
             }
-            else if (t > config.maxDistance) {
+            if (t > config.lifeTime) {
                 rs.Disconnect();
                 config.onTerminated();
             }
 
-            let deltadown = config.gravity.mul(dt);
-            let deltafront = config.origin.add(config.direction.mul(t)).sub(deltadown);
+            let acceleration = config.gravity;
+            let velocity = config.direction.mul(config.velocity);
+            let initialPosition = config.origin;
+
+            let currentPosition = motion(acceleration, velocity, initialPosition, t);
+            let nextPosition = motion(acceleration, velocity, initialPosition, t + 1 / 60);
+
+            let direction = CFrame.lookAt(currentPosition, nextPosition).LookVector;
+            let distance = (nextPosition.sub(currentPosition)).Magnitude;
+
+            instance.SetPrimaryPartCFrame(CFrame.lookAt(currentPosition, nextPosition));
 
             let params = new RaycastParams();
-            params.FilterDescendantsInstances = config.ignoreInstances;
+            params.FilterDescendantsInstances = [...config.ignoreInstances, instance];
 
             let result: RaycastResult | undefined = undefined;
             let resultPass = false;
 
-            while (!resultPass) {
-               let r = Workspace.Raycast(currentPosition, deltafront, params);
-               if (r) {
-                   let h = r.Instance;
-                   if (config.ignoreNames && config.ignoreNames.indexOf(h.Name) !== -1) continue;
-                   let c = h.Parent;
-                   let p = Players.GetPlayerFromCharacter(c);
-                   if (p && config.ignorePlayers && config.ignorePlayers.indexOf(p) !== -1) continue;
-                   result = r;
-                   resultPass = true;
-               }
-               else {
-                   resultPass = true;
-               }
+            if (!config.ignoreEverything) {
+                while (!resultPass) {
+                    let r = Workspace.Raycast(currentPosition, direction.mul(distance).add(direction.mul((config.instance.PrimaryPart as BasePart).Size.Z / 2)), params);
+                    if (r) {
+                        let h = r.Instance;
+                        if (config.ignoreNames && config.ignoreNames.indexOf(h.Name) !== -1) continue;
+                        let c = h.Parent;
+                        let p = Players.GetPlayerFromCharacter(c);
+                        if (p && config.ignorePlayers && config.ignorePlayers.indexOf(p) !== -1) continue;
+                        result = r;
+                        resultPass = true;
+                    }
+                    else {
+                        resultPass = true;
+                    }
+                }
             }
+            
             if (result) {
                 let position = result.Position;
                 currentPosition = position;
-                instance.SetPrimaryPartCFrame(CFrame.lookAt(currentPosition, currentPosition.mul(2)));
+                instance.SetPrimaryPartCFrame(CFrame.lookAt(currentPosition, nextPosition));
                 rs.Disconnect();
-                this.explode(position);
+                config.onHit();
             }
             else {
-               currentPosition = deltafront;
-               instance.SetPrimaryPartCFrame(CFrame.lookAt(currentPosition, currentPosition.mul(2)));
+               currentPosition = currentPosition;
+               instance.SetPrimaryPartCFrame(CFrame.lookAt(currentPosition, nextPosition));
             }
         })
     }

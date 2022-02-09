@@ -5,6 +5,16 @@ import matchService from "./services/matchservice";
 
 namespace minerva {
 
+    export function extractKeysFromDictionaries(dictionaries: Record<string, unknown>[]): string[] {
+        let keys: string[] = [];
+        dictionaries.forEach((d) => {
+            for (const [i, v] of pairs(d)) {
+                keys.push(i);
+            }
+        });
+        return keys;
+    }
+
     export const allowedOverheal: number = 50;
 
     export const reloadLengths = {

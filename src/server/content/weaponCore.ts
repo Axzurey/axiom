@@ -7,6 +7,7 @@ import float from "server/float";
 import minerva from "shared/minerva";
 import impactSoundMap from "shared/content/mapping/impactSoundMap";
 import breach from "shared/classes/breach";
+import env from "server/dumps/env";
 
 export default class weaponCore extends sohk.sohkComponent {
     client: Player;
@@ -139,16 +140,29 @@ export default class weaponCore extends sohk.sohkComponent {
                     }
                     if (!hum && !canpen) {canScan = false; break;}
                     if (hum) {
-                        print('hum')
-                        ignore.push(hit.Parent as Instance);
-                        if (hum.Health > 0) {
-                            hum.TakeDamage(this.baseDamage);
-                            if (hum.Health <= 0) {
-                                print("bot killed");
-                                let info = float.processImpact(this.client, hit, player || {})
-                                when.entityKilled.entityDied(this.client, undefined, player? when.entityType.Player:when.entityType.Bot, info.impactLocation);
+                        if (player) {
+                            let charclass = env.characterClasses[player.UserId];
+                            if (charclass) {
+                                let info = float.processImpact(this.client, hit, player || {});
+                                let damage = info.impactLocation === float.playerContacts.body? this.baseDamage: 
+                                    (info.impactLocation === float.playerContacts.head? this.headDamage: this.limbDamage);
+                                charclass.inflictDamage(damage);
                             }
                         }
+                        else {
+                            print('hum')
+                            ignore.push(hit.Parent as Instance);
+                            if (hum.Health > 0) {
+                                let info = float.processImpact(this.client, hit, player || {})
+                                let damage = info.impactLocation === float.playerContacts.body? this.baseDamage: 
+                                    (info.impactLocation === float.playerContacts.head? this.headDamage: this.limbDamage);
+                                hum.TakeDamage(damage);
+                                if (hum.Health <= 0) {
+                                    print("bot killed");
+                                }
+                            } 
+                        }
+                        
                     }
                     else {
                         ignore.push(hit);
@@ -219,7 +233,7 @@ export default class weaponCore extends sohk.sohkComponent {
     }
     reload() {
         if (!this.equipped) return;
-        if (this.reloading) return;
+        //if (this.reloading) return;
         if (this.ammo >= this.maxAmmo + this.ammoOverload) return;
         if (tick() - this.lastReload < this.reloadCooldown) return;
         if (this.reserve <= 0) return;

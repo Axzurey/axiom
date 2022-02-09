@@ -49,7 +49,7 @@ namespace float {
         'LeftArm': playerContacts.limb,
     }
     export function contactFromHit(hitName: string) {
-        return contactMap[hitName as keyof typeof contactMap] || playerContacts.limb;
+        return contactMap[hitName as keyof typeof contactMap];
     }
     export function processImpact(sender: Player | bot, hit: BasePart, reciever: Player | bot) {
         let impactType = contactFromHit(hit.Name);

@@ -29,6 +29,10 @@ namespace fps_framework_types {
         blank: {
             module: blank_arms,
             equipped: boolean,
+        },
+        extra1: {
+            module: weaponCore,
+            equipped: boolean
         }
     }
     export interface abilityloadout {

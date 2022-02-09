@@ -15,7 +15,7 @@ interface bulletCastResult {
 
 interface bulletParams {
     onHit?: (result: bulletCastResult) => number,
-    onTerminated?: () => void,
+    onTerminated?: () => void,  
     maxPenetration: number,
     range: number,
     origin: Vector3,

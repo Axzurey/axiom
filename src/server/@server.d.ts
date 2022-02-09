@@ -27,6 +27,11 @@ declare interface clientData {
         secondaryAbility: {
             name: string,
             module: ability_Core
+        },
+        extra1: {
+            name: string,
+            skin: string,
+            module: weaponCore,
         }
     },
 }

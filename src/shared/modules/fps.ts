@@ -27,6 +27,9 @@ import interpolations from "shared/functions/interpolations";
 import arms from "./arms";
 import cameraController, { cameraConfig } from "./cameraController";
 import blank_arms from "shared/content/basic/blank_arms";
+import muon_item from "shared/content/abilities/muon_item";
+import muon from "shared/content/abilities/muon";
+import projectile_handler from "shared/passive/projectile_handler";
 
 export default class fps_framework extends sohk.sohkComponent {
     camera: Camera = Workspace.CurrentCamera as Camera;
@@ -137,11 +140,15 @@ export default class fps_framework extends sohk.sohkComponent {
         blank: {
             module: new blank_arms(this),
             equipped: false,
+        },
+        extra1: {
+            module: new muon_item(this),
+            equipped: false,
         }
     }
     Abilities: fps_framework_types.abilityloadout = {
         primaryAbility: {
-            module: new illusoryDream(this),
+            module: new muon(this),
             equipped: false,
         },
         secondaryAbility: {
@@ -170,6 +177,8 @@ export default class fps_framework extends sohk.sohkComponent {
     cameras: clientCamera.camera[] = [];
     onCamera: boolean = false;
     selectedCamera: number = 0;
+
+    proj_handler = new projectile_handler();
 
     constructor() {
         super();
@@ -459,6 +468,7 @@ export default class fps_framework extends sohk.sohkComponent {
         if (t) {
             equipped.module.toggleInspect(false);
             this.toggleStance(1);
+            this.toggleAim(false);
             this.toggleSneak(false);
             this.toggleLean(0);
         }
@@ -904,9 +914,45 @@ export default class fps_framework extends sohk.sohkComponent {
         if (forceReturn) return;
         const vaultdistance = 8;
         const ignore = new RaycastParams();
-        ignore.FilterDescendantsInstances = [this.camera, this.character];
+        ignore.FilterDescendantsInstances = [this.camera, this.character, Workspace.FindFirstChild('ignore') as Folder];
+
         let result = Workspace.Raycast(this.camera.CFrame.Position, this.camera.CFrame.LookVector.mul(vaultdistance), ignore);
         if (result) {
+            let inset = this.camera.CFrame.LookVector.mul(5); //push it a bit inwards
+
+            let instance = result.Instance;
+            let normal = result.Normal;
+            let position = result.Position;
+
+            let topSurface = mathf.closestPointOnPart(instance, position.add(new Vector3(0, 10000, 0)));
+
+            let maxCharacterYDifference = 10;
+
+            mathf.plotInWorld(topSurface, new Color3(1, .25, 1))
+
+            let [characterCFrame, boundingSize] = this.character.GetBoundingBox();
+
+            if (math.abs(topSurface.Y - characterCFrame.Position.Y) > maxCharacterYDifference) {
+                print('too high to vault')
+                return;
+            }
+
+            let blockoff = 1; //so it has a bit more room
+
+            let topOccupied = Workspace.Raycast(topSurface.add(inset), new Vector3(0, boundingSize.Y + blockoff, 0), ignore);
+
+            if (topOccupied) {
+                print("above the result is blocked");
+            }
+            else {
+                print("should be vaultable");
+            }
+        }
+        else {
+            print('cant vault');
+        }
+
+        /*if (result) {
             let partsIn = Workspace.GetPartsInPart(result.Instance);
             let kill = false;
             partsIn.forEach((v) => {
@@ -963,7 +1009,7 @@ export default class fps_framework extends sohk.sohkComponent {
         }
         else {
             print("can't vault")
-        }
+        }*/
     }
     inspect() {
         let forceReturn = false;
@@ -1055,8 +1101,8 @@ export default class fps_framework extends sohk.sohkComponent {
             this.replicationService.remotes.act.FireServer('updateMovementState', currentMovementState)
 
             const oscMVMT = this.cameraService.bobLemnBern(
-                this.rappelling? 3 : this.humanoid.WalkSpeed / 3 * env.bobSpeedModifier,
-                this.rappelling? .15: this.humanoid.WalkSpeed / 50 * env.bobIntensityModifier);
+                this.rappelling? 3 : this.humanoid.WalkSpeed / 2.5 * env.bobSpeedModifier,
+                this.rappelling? .15: this.humanoid.WalkSpeed / 30 * env.bobIntensityModifier);
             
             this.offsets.movementOscillation = this.offsets.movementOscillation.Lerp(
                 moveDirection.Magnitude === 0? new CFrame(): 
@@ -1141,33 +1187,10 @@ export default class fps_framework extends sohk.sohkComponent {
                 rootpart.Anchored = false;
             }
 
-            //let [rx, ry, rz] = this.camera.CFrame.ToOrientation();
+            let [rx, ry, rz] = this.camera.CFrame.ToOrientation();
             //setting things to cam causes lag;
-            /*
+            
             vm.SetPrimaryPartCFrame(new CFrame(this.camera.CFrame.Position)
-                .mul(env.vmOffset.Value)
-                .mul(this.offsets.stance.Value)
-                .mul(CFrame.fromOrientation(rx, ry, rz))
-                .mul(cf)
-                .mul(new CFrame(recoilvmVector))
-                .mul(l)
-                //.mul(this.offsets.aimOscillation)
-                .mul(this.offsets.movementTilt)
-                .mul(this.offsets.movementOscillation)
-                .mul(this.offsets.gunLean.Value)
-                .mul(this.offsets.cameraMovementTilt)
-            );*/
-
-            UserInputService.MouseIconEnabled = false;
-
-            let [cameraOrigin, cameraCFrame] = this.cameraController.render(
-                [this.offsets.stance.Value],
-                [l, CFrame.Angles(math.rad(recoil.Y), math.rad(recoil.X), 0), this.offsets.movementOscillation]
-            )
-
-            let [rx, ry, rz] = cameraOrigin.ToOrientation();
-
-            vm.SetPrimaryPartCFrame(new CFrame(cameraOrigin.Position)
                 .mul(env.vmOffset.Value)
                 .mul(this.offsets.stance.Value)
                 .mul(CFrame.fromOrientation(rx, ry, rz))
@@ -1181,13 +1204,15 @@ export default class fps_framework extends sohk.sohkComponent {
                 .mul(this.offsets.cameraMovementTilt)
             );
 
-            /*
+            UserInputService.MouseIconEnabled = false;
+
+            
             this.camera.CFrame = new CFrame(this.camera.CFrame.Position)
                 .mul(this.offsets.stance.Value)
                 .mul(CFrame.fromOrientation(rx, ry, rz))
                 .mul(l)
                 .mul(CFrame.Angles(math.rad(recoil.Y), math.rad(recoil.X), 0))
-                .mul(this.offsets.movementOscillation)*/
+                .mul(this.offsets.movementOscillation)
             
             let mod1 = this.pronePlaying? 0: 1;
             let mod2 = this.stance === 0? .5: 1;
@@ -1222,5 +1247,6 @@ export default class fps_framework extends sohk.sohkComponent {
 
         this.humanoid.JumpPower = 0;
         this.humanoid.UseJumpPower = true;
+
     }
 }

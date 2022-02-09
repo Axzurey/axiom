@@ -3,7 +3,9 @@ import phyxConfig from "./phyxConfig";
 
 type remoteProtocol = (...args: never[]) => void;
 
-//S is args server sends, C is args client sends
+/**
+ * S is args server sends, C is args client sends
+ */
 
 export default class phyxRemoteProtocol<C extends remoteProtocol, S extends remoteProtocol> {
     identifier: string;
@@ -14,10 +16,16 @@ export default class phyxRemoteProtocol<C extends remoteProtocol, S extends remo
     }[] = [];
     constructor(uniqueIdentifier: string, kind: 'Event' | 'Function') {
         this.identifier = uniqueIdentifier;
-        let remote = new Instance(`Remote${kind}`);
-        remote.Name = uniqueIdentifier;
-        remote.Parent = phyxConfig.remotes;
-        this.remote = remote;
+        if (RunService.IsServer()) {
+            let remote = new Instance(`Remote${kind}`);
+            remote.Name = uniqueIdentifier;
+            remote.Parent = phyxConfig.remotes;
+            this.remote = remote;
+        }
+        else {
+            let remote = phyxConfig.remotes.WaitForChild(uniqueIdentifier) as RemoteEvent;
+            this.remote = remote;
+        }
 
         if (this.remote.IsA('RemoteEvent')) {
             if (RunService.IsServer()) {
@@ -78,6 +86,7 @@ export default class phyxRemoteProtocol<C extends remoteProtocol, S extends remo
             },
             callback: callback
         }
+        this.connections.push(r);
         return r;
     }
     connectClient(callback: (...args: Parameters<S>) => void) {
@@ -94,6 +103,7 @@ export default class phyxRemoteProtocol<C extends remoteProtocol, S extends remo
             },
             callback: callback
         }
+        this.connections.push(r);
         return r;
     }
     fireClient(client: Player, ...args: Parameters<S>) {

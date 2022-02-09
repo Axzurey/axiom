@@ -1,4 +1,4 @@
-import { Players } from "@rbxts/services";
+import { Players, TweenService } from "@rbxts/services";
 import { main } from "server/main.server";
 import { action } from "shared/config/replication/replication";
 import verifyTypes from "shared/functions/verifyTypes";

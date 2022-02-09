@@ -20,6 +20,8 @@ import serverReplication from "./helpers/serverReplication";
 import glock18_fade from "./content/guns/glock18/glock18_fade";
 import knife_saber from "./content/guns/knife/knife_saber";
 import { camera } from "./classes/camera";
+import muon_item from "./content/abilities/muon_item";
+import env from "./dumps/env";
 
 const sk = new sohk();
 
@@ -37,6 +39,7 @@ export class main extends sohk.sohkComponent {
 
         Players.PlayerAdded.Connect((client) => {
             const cls = new characterClass(client);
+            env.characterClasses[client.UserId] = cls;
             this.replChar.newPlayer(client);
             float.playerCharacterClasses[client.UserId] = cls;
             clientdata[client.UserId] = {
@@ -64,6 +67,11 @@ export class main extends sohk.sohkComponent {
                     secondaryAbility: {
                         name: 'Laser Turret',
                         module: new laser_turret(client, cls),
+                    },
+                    extra1: {
+                        name: 'Muon Core',
+                        skin: 'blank',
+                        module: new muon_item(client, cls),
                     }
                 }
             }
@@ -72,7 +80,7 @@ export class main extends sohk.sohkComponent {
         const loadreq = remotes?.FindFirstChild("requestLoad") as RemoteFunction
         loadreq.OnServerInvoke = function(client: Player, ...args: unknown[]) {
             let pos = args[0] as 'primary' | 'melee' | 'secondary';
-            if (pos !== 'primary' && pos !== 'melee' && pos !== 'secondary') return;
+            if (!clientdata[client.UserId].loadout[pos]) return;
             return clientdata[client.UserId].loadout[pos].module.loadRemotes();
         }
 

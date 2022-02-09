@@ -55,7 +55,14 @@ function interpolateV3(t: number, v0: Vector3, v1: Vector3, style: keyof typeof 
     return new Vector3(x, y, z);
 }
 
+function interpolateV2(t: number, v0: Vector2, v1: Vector2, style: keyof typeof interpolations) {
+    let x = interpolate(t, v0.X, v1.X, style);
+    let y = interpolate(t, v0.Y, v1.Y, style);
+    return new Vector2(x, y);
+}
+
 export = {
     interpolate: interpolate,
     interpolateV3: interpolateV3,
+    interpolateV2: interpolateV2,
 }
