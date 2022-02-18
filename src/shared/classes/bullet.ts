@@ -90,6 +90,12 @@ export default class bullet {
                         terminated = true;
                     }
                 }
+                else {
+                    print('params.onhit not implemented!')
+                }
+            }
+            else {
+                terminated = true;
             }
         }
         if (params.onTerminated) {

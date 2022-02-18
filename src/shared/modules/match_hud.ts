@@ -4,6 +4,7 @@ import matchService, { roundState, roundStateConversions } from "shared/services
 import sohk from "shared/sohk/init";
 import { mathf, Threading } from "./System";
 import { sohkConnection } from "shared/connections/sohkTypes";
+import crosshairController from "shared/content/crosshairController";
 
 const _hudFolder = ReplicatedStorage.WaitForChild('hud') as Folder;
 

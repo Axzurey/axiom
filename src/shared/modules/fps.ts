@@ -30,6 +30,8 @@ import blank_arms from "shared/content/basic/blank_arms";
 import muon_item from "shared/content/abilities/muon_item";
 import muon from "shared/content/abilities/muon";
 import projectile_handler from "shared/passive/projectile_handler";
+import hk416_default from "shared/content/guns/hk416/hk416";
+import actionPrompt from "shared/interface/actionPrompt";
 
 export default class fps_framework extends sohk.sohkComponent {
     camera: Camera = Workspace.CurrentCamera as Camera;
@@ -157,31 +159,28 @@ export default class fps_framework extends sohk.sohkComponent {
         },
     }
     lastMovementState: datatypes.movementState = datatypes.movementState.idle;
-    isKeyCode(e: Enum.UserInputType | Enum.KeyCode) {
-        if (e.EnumType === Enum.KeyCode) return true; return false;
-    }
     crosshair = new crosshairController(); //don't forget a backdrop
-    keyIs(input: InputObject, str: keyof keybinds) {
-        if (this.keybinds[str] === input.KeyCode || this.keybinds[str] === input.UserInputType) return true;
-        return false;
-    }
-    getAllActiveAbilities() {
-        let t: {module: ability_core, equipped: boolean}[] = [];
-        for (const [i, v] of pairs(this.Abilities)) {
-            if (v.module.active) {
-                t.push(v);
-            }
-        }
-        return t;
-    }
+    
     cameras: clientCamera.camera[] = [];
     onCamera: boolean = false;
     selectedCamera: number = 0;
 
     proj_handler = new projectile_handler();
 
+    crosshairOffsets = {
+        hipfireMultiplier: new Instance("NumberValue"),
+        movementMultiplier: new Instance("NumberValue"),
+    }
+
+    prompts = {
+        vaultPrompt: new actionPrompt('PRESS', 'TO VAULT', this.keybinds.vault),
+        rappelPrompt: new actionPrompt('HOLD', 'TO RAPPEL', this.keybinds.rappel),
+        rappelExitPrompt: new actionPrompt('PRESS', 'TO EXIT RAPPEL', this.keybinds.rappel),
+    }
+
     constructor() {
         super();
+        let mval = this.crosshair.addMultiplierValue(this.crosshairOffsets.movementMultiplier);
         clientService.createCamera.connect((cameraid, config) => {
             let cam = new clientCamera.camera(cameraid, config);
             this.cameras.push(cam);
@@ -212,6 +211,9 @@ export default class fps_framework extends sohk.sohkComponent {
         })
         this.replicationService.remotes.act.OnClientEvent.Connect((action: action, ...args: unknown[]) => {
             replication.handleReplicate(action, ...args);
+        })
+        let promptRenderer = RunService.RenderStepped.Connect(() => {
+            this.updatePrompts()
         })
         let gameplayrender = RunService.RenderStepped.Connect((dt) => {
             this.update(dt);
@@ -300,6 +302,22 @@ export default class fps_framework extends sohk.sohkComponent {
                 this.toggleSneak(false);
             }
         })
+    }
+    keyIs(input: InputObject, str: keyof keybinds) {
+        if (this.keybinds[str] === input.KeyCode || this.keybinds[str] === input.UserInputType) return true;
+        return false;
+    }
+    getAllActiveAbilities() {
+        let t: {module: ability_core, equipped: boolean}[] = [];
+        for (const [i, v] of pairs(this.Abilities)) {
+            if (v.module.active) {
+                t.push(v);
+            }
+        }
+        return t;
+    }
+    isKeyCode(e: Enum.UserInputType | Enum.KeyCode) {
+        if (e.EnumType === Enum.KeyCode) return true; return false;
     }
     unequip(noPass: boolean = false) {
         this.getAllActiveAbilities().forEach((v) => {
@@ -487,8 +505,8 @@ export default class fps_framework extends sohk.sohkComponent {
         if (this.sprinting) return;
         if (this.plantingBomb || this.defusingBomb) return;
         this.toggleSneak(false);
-        let info1 = new TweenInfo(.35);
-        let info2 = new TweenInfo(.6);
+        let info1 = new TweenInfo(.35, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut);
+        let info2 = new TweenInfo(.6, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut);
         let info = this.stance === -1 || t === -1? info2: info1
         if (t === this.stance && t === 0 && !force) {
             t = 1;
@@ -554,7 +572,10 @@ export default class fps_framework extends sohk.sohkComponent {
             TweenService.Create(this.offsets.aimSensitivityMultiplier, ti, {Value: 0}).Play();
         }
     }
- 
+    getPenalty() {
+        let speed = this.humanoid.MoveDirection.Magnitude;
+        return []
+    }
     equip(item: keyof fps_framework_types.loadout) {
         if (this.getEquipped() === this.loadout[item]) return;
         this.toggleAim(false);
@@ -625,8 +646,14 @@ export default class fps_framework extends sohk.sohkComponent {
             }
         }
     }
-    attemptRappel() {
-        if (this.rappelling) return;
+    attemptRappel(check: boolean = false) {
+        if (this.rappelling) {
+            this.prompts.rappelPrompt.hide()
+            return;
+        };
+        if (!this.rappelling && check) {
+            this.prompts.rappelExitPrompt.hide();
+        }
         let forceReturn = false;
         this.getAllActiveAbilities().forEach((v) => {
             if (v.module.obscuresActions || !v.module.canRappelWhileActive) {
@@ -646,6 +673,8 @@ export default class fps_framework extends sohk.sohkComponent {
             }
         })
         if (selected) {
+            this.prompts.rappelPrompt.show();
+            if (check) return;
             this.rappelWall = selected as BasePart;
             this.enteringRappel = true;
 
@@ -705,32 +734,40 @@ export default class fps_framework extends sohk.sohkComponent {
                 a1.WorldPosition = cf.Position.sub(new Vector3(0, (this.character.PrimaryPart as BasePart).Size.Y / 2, 0));;
                 a2.WorldPosition = targetPosition;
                 this.replicationService.remotes.act.FireServer('updateRappelRope', a2.WorldPosition);
+                let dropLenience = 4;
+                let human = this.character.FindFirstChild('HumanoidRootPart') as BasePart;
+                let requiredY = this.rappelWall.Position.Y + this.rappelWall.Size.Y / 2;
+                let dequiredY = this.rappelWall.Position.Y - this.rappelWall.Size.Y / 2 + dropLenience;
+                let humanY = (human).Position.Y;
+                function cpop(part: Part, point: Vector3) {// closest point on part
+                    let t = part.CFrame.PointToObjectSpace(point);
+                    let hs = part.Size.div(2);
+
+                    return part.CFrame.mul(new Vector3(
+                        math.clamp(t.X, -hs.X, hs.X),
+                        math.clamp(t.Y, -hs.Y, hs.Y),
+                        math.clamp(t.Z, -hs.Z, hs.Z),
+                    ))
+                }
+                let origin = this.character.GetPrimaryPartCFrame();
+                let searchSize = new Vector3(.1, .1, 10)
+                let searchBox = Workspace.GetPartBoundsInBox(origin, searchSize);
+                let _target: Part | undefined = undefined;
+                searchBox.forEach((v) => {
+                    if (v.Name === 'window') {
+                        _target = v as Part;
+                    }
+                })
+                if (tick() - started > 1) {
+                    if (_target || humanY >= requiredY || humanY <= dequiredY) {
+                        this.prompts.rappelExitPrompt.show()
+                    }
+                    else {
+                        this.prompts.rappelExitPrompt.hide()
+                    }
+                }
                 if (UserInputService.IsKeyDown(this.keybinds.rappel as Enum.KeyCode || Enum.UserInputType) && !rappelExiting) {
                     if (tick() - started < 1) return;
-                    let dropLenience = 4;
-                    let human = this.character.FindFirstChild('HumanoidRootPart') as BasePart;
-                    let requiredY = this.rappelWall.Position.Y + this.rappelWall.Size.Y / 2;
-                    let dequiredY = this.rappelWall.Position.Y - this.rappelWall.Size.Y / 2 + dropLenience;
-                    let humanY = (human).Position.Y;
-                    function cpop(part: Part, point: Vector3) {// closest point on part
-                        let t = part.CFrame.PointToObjectSpace(point);
-                        let hs = part.Size.div(2);
-
-                        return part.CFrame.mul(new Vector3(
-                            math.clamp(t.X, -hs.X, hs.X),
-                            math.clamp(t.Y, -hs.Y, hs.Y),
-                            math.clamp(t.Z, -hs.Z, hs.Z),
-                        ))
-                    }
-                    let origin = this.character.GetPrimaryPartCFrame();
-                    let searchSize = new Vector3(.1, .1, 10)
-                    let searchBox = Workspace.GetPartBoundsInBox(origin, searchSize);
-                    let _target: Part | undefined = undefined;
-                    searchBox.forEach((v) => {
-                        if (v.Name === 'window') {
-                            _target = v as Part;
-                        }
-                    })
                     if (_target) {
                         let target = _target as Part;
                         let endPosition = target.Position.add(target.CFrame.LookVector.mul(5));
@@ -763,17 +800,10 @@ export default class fps_framework extends sohk.sohkComponent {
                         //test again
                         //teleporting back to original origin
                         let c = RunService.RenderStepped.Connect((dt) => {
-                            if (t01 >= 1) {
-                                t += 1 / 1.25 * dt;
-                                if (!firstdone && !setFirst) {
-                                    firstdone = true;
-                                    setFirst = true;
-                                }
-                            }
-                            else {
-                                t01 += 1.3 * dt;
-                            }
-                            if (t >= 1) {c.Disconnect();
+                            t += 1 / 2 * dt;
+
+                            if (t >= 1) {
+                                c.Disconnect();
                                 ctal.forEach((v, i) => {
                                     i.CanCollide = v;
                                 })
@@ -783,27 +813,12 @@ export default class fps_framework extends sohk.sohkComponent {
                                 this.replicationService.remotes.act.FireServer('toggleRappelling', false);
                                 return;
                             }
-                            if (firstdone) {
-                                firstdone = false;
-                                //let bezier01 = mathf.lerpV3(origin.Position, firstP, t01)
-                                //origin = CFrame.lookAt(bezier01, target.Position.add(target.CFrame.LookVector.mul(20)));
-                                //this.character.SetPrimaryPartCFrame(origin);
-                            }
-                            if (t01 >= 0) {
-                                let cald = interpolations.interpolate(t, 0, 1, 'quadIn')
-                                let cald2 = interpolations.interpolate(t, 0, 1, 'quadOut')
-                                let bezier01 = mathf.lerpV3(origin.Position, firstP, math.clamp(cald2, 0, 1));
-                                let bezier = mathf.bezierQuadraticV3(cald, bezier01, mid, endPosition);
-                                mathf.plotInWorld(bezier)
-                                this.character.SetPrimaryPartCFrame(CFrame.lookAt(bezier, target.Position.add(target.CFrame.LookVector.mul(20))));
-                            }
-                            else {
-                                if (setFirst) return;
-                                let cald = interpolations.interpolate(t01, 0, 1, 'quadOut')
-                                let bezier01 = mathf.lerpV3(origin.Position, firstP, cald)
-                                mathf.plotInWorld(bezier01, Color3.fromRGB(125, 150, 0))
-                                this.character.SetPrimaryPartCFrame(CFrame.lookAt(bezier01, target.Position.add(target.CFrame.LookVector.mul(20))));
-                            }
+                            let cald = interpolations.interpolate(t, 0, 1, 'quadIn')
+                            let cald2 = interpolations.interpolate(t, 0, 1, 'quadOut')
+                            let bezier01 = mathf.lerpV3(origin.Position, firstP, math.clamp(cald2, 0, 1));
+                            let bezier = mathf.bezierQuadraticV3(cald, bezier01, mid, endPosition);
+                            mathf.plotInWorld(bezier)
+                            this.character.SetPrimaryPartCFrame(CFrame.lookAt(bezier, target.Position.add(target.CFrame.LookVector.mul(20))));
                         })
                     }
                     else if (humanY >= requiredY) {
@@ -901,10 +916,14 @@ export default class fps_framework extends sohk.sohkComponent {
             })
         }
         else {
-            print('no result')
+            this.prompts.rappelPrompt.hide();
         }
     }
-    attemptVault() {
+    attemptVault(check: boolean = false) {
+        if (this.vaulting || this.rappelling) {
+            this.prompts.vaultPrompt.hide()
+            return
+        }
         let forceReturn = false;
         this.getAllActiveAbilities().forEach((v) => {
             if (v.module.obscuresActions || !v.module.canVaultWhileActive) {
@@ -918,7 +937,7 @@ export default class fps_framework extends sohk.sohkComponent {
 
         let result = Workspace.Raycast(this.camera.CFrame.Position, this.camera.CFrame.LookVector.mul(vaultdistance), ignore);
         if (result) {
-            let inset = this.camera.CFrame.LookVector.mul(5); //push it a bit inwards
+            let inset = this.camera.CFrame.LookVector.mul(2); //push it a bit inwards
 
             let instance = result.Instance;
             let normal = result.Normal;
@@ -926,53 +945,43 @@ export default class fps_framework extends sohk.sohkComponent {
 
             let topSurface = mathf.closestPointOnPart(instance, position.add(new Vector3(0, 10000, 0)));
 
-            let maxCharacterYDifference = 10;
-
-            mathf.plotInWorld(topSurface, new Color3(1, .25, 1))
+            let maxCharacterYDifference = 4;
 
             let [characterCFrame, boundingSize] = this.character.GetBoundingBox();
 
-            if (math.abs(topSurface.Y - characterCFrame.Position.Y) > maxCharacterYDifference) {
-                print('too high to vault')
+            if (math.abs(topSurface.Y - characterCFrame.Position.Y) > maxCharacterYDifference || topSurface.Y < characterCFrame.Position.Y - 1) {
+                //print('too high to vault')
+                this.prompts.vaultPrompt.hide()
                 return;
             }
 
             let blockoff = 1; //so it has a bit more room
 
+            mathf.plotInWorld(topSurface.add(inset), new Color3(0, 1, .5))
+
             let topOccupied = Workspace.Raycast(topSurface.add(inset), new Vector3(0, boundingSize.Y + blockoff, 0), ignore);
 
             if (topOccupied) {
-                print("above the result is blocked");
+                //print("above the result is blocked");
+                this.prompts.vaultPrompt.hide()
             }
             else {
-                print("should be vaultable");
-            }
-        }
-        else {
-            print('cant vault');
-        }
+                //print("should be vaultable");
+                this.prompts.vaultPrompt.show()
+                if (check) return;
+                this.toggleLean(0);
+                this.toggleStance(0);
+                task.wait(.1);
+                let targetPosition = topSurface.add(inset).add(new Vector3(0, boundingSize.Y / 2, 0));
 
-        /*if (result) {
-            let partsIn = Workspace.GetPartsInPart(result.Instance);
-            let kill = false;
-            partsIn.forEach((v) => {
-                if (v.Parent === this.character) {
-                    kill = true;
-                    return;
+                let origin = characterCFrame;
+                let mid = mathf.lerpV3(origin.Position, targetPosition, .75).add(new Vector3(0, 2, 0));
+
+                let targetdown = Workspace.Raycast(targetPosition, new Vector3(0, -10, 0), ignore);
+                if (!targetdown) {
+                    targetPosition = topSurface.add(inset.mul(5)).add(new Vector3(0, boundingSize.Y / 2, 0));
+                    mid = mathf.lerpV3(origin.Position, targetPosition, .5).add(new Vector3(0, 5, 0));
                 }
-            })
-            if (kill) return;
-            const [hit, position, normal] = [result.Instance, result.Position, result.Normal];
-            if (worldData.vaultGates[hit.Name as keyof typeof worldData.vaultGates]) {
-                let eq = this.getEquipped();
-                if (!eq) return;
-                eq.module.toggleInspect(false);
-                let craft1 = new Vector3(position.X, 0, position.Z);
-                const origin = this.character.GetPrimaryPartCFrame();
-                const targetPosition = craft1.add(normal.mul(-1).mul(5)).add(new Vector3(0, hit.Position.Y + (hit.Size.Y / 2), 0));
-                const targetCFrame = CFrame.lookAt(targetPosition, normal.mul(-1).mul(999));
-
-                let mid = mathf.lerpV3(origin.Position, targetPosition, .5).add(new Vector3(0, 2, 0));
 
                 let ctal: Map<BasePart, boolean> = new Map();
                 this.character.GetChildren().forEach((v) => {
@@ -983,33 +992,44 @@ export default class fps_framework extends sohk.sohkComponent {
 
                 let t = 0;
 
-                let closest = mathf.closestPointOnPart(hit, origin.Position).add(this.camera.CFrame.RightVector.mul(-1));
                 let equipped = this.getEquipped();
                 if (equipped) {
-                    mathf.plotInWorld(closest, new Color3(1, 1, 0))
-                    arms.smoothArmLookAt(this.camera, equipped.module.viewmodel, 'left', closest);
+                    let closest = topSurface.add(this.camera.CFrame.RightVector.mul(-4));
+                    //mathf.plotInWorld(closest, new Color3(1, 1, 0));
+                    //arms.smoothArmLookAt(this.camera, equipped.module.viewmodel, 'left', closest);
                 }
                 
                 this.vaulting = true;
                 let c = RunService.RenderStepped.Connect((dt) => {
                     t += 2 * dt;
+                    t = math.clamp(t, 0, 1)
                     if (t >= 1) {
                         c.Disconnect();
-                        this.vaulting = false;
                         ctal.forEach((v, i) => {
                             i.CanCollide = v;
                         })
-                        return;
+                        if (!targetdown) {
+                            this.vaulting = false;
+                            this.toggleStance(1);
+                            return;
+                        }
+                        else {
+                            task.wait(.05)
+                            this.vaulting = false;
+                            this.toggleStance(1);
+                            return;
+                        }
                     }
                     let l = interpolations.interpolate(t, 0, 1, "quadInOut");
                     let bez = mathf.bezierQuadraticV3(l, origin.Position, mid, targetPosition);
-                    this.character.SetPrimaryPartCFrame(CFrame.lookAt(bez, targetCFrame.Position.add(targetCFrame.LookVector)));
+                    this.character.SetPrimaryPartCFrame(CFrame.lookAt(bez, new Vector3()));
                 });
             }
         }
         else {
-            print("can't vault")
-        }*/
+            //print('cant vault');
+            this.prompts.vaultPrompt.hide()
+        }
     }
     inspect() {
         let forceReturn = false;
@@ -1041,6 +1061,10 @@ export default class fps_framework extends sohk.sohkComponent {
         else {
             return 1;
         }
+    }
+    updatePrompts() {
+        this.attemptVault(true);
+        this.attemptRappel(true);
     }
     update(dt: number) {
         let equipped = this.getEquipped();
@@ -1244,6 +1268,11 @@ export default class fps_framework extends sohk.sohkComponent {
             equipped.module.update();
         }
         replication.replicate(this, 'setCFrame', this.character.GetPrimaryPartCFrame());
+
+        this.crosshairOffsets.movementMultiplier.Value = 
+            mathf.lerp(this.crosshairOffsets.movementMultiplier.Value, 
+                    this.humanoid.MoveDirection.Magnitude === 0? 1: 2, .1
+            )
 
         this.humanoid.JumpPower = 0;
         this.humanoid.UseJumpPower = true;

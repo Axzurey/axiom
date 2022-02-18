@@ -8,6 +8,10 @@ import minerva from "shared/minerva";
 import impactSoundMap from "shared/content/mapping/impactSoundMap";
 import breach from "shared/classes/breach";
 import env from "server/dumps/env";
+import verifyParam from "shared/functions/verifyParam";
+import bullet from "shared/classes/bullet";
+import { t } from "@rbxts/t";
+import { mathf } from "shared/modules/System";
 
 export default class weaponCore extends sohk.sohkComponent {
     client: Player;
@@ -266,6 +270,35 @@ export default class weaponCore extends sohk.sohkComponent {
             this.replicationService.remotes.requestPlayerAmmo.InvokeClient(this.client, this.ammo, this.maxAmmo + this.ammoOverload, this.reserve);
         })()
     }
+    shoot(position: Vector3, direction: Vector3) {
+        if (!this.equipped) return;
+        if (this.isAGun) {
+            if (this.ammo <= 0) return;
+            if (tick() - this.lastfired < 60 / this.firerate) return;
+            this.lastfired = tick();
+            this.ammo -= 1;
+            const Bullet = new bullet({
+                onHit: (result) => {
+                    print('hit something')
+                    let position = result.position;
+                    mathf.plotInWorld(position, new Color3(1, .5, .5))
+                    minerva.createBulletHole(position, result.normal, result.material, .5, new Color3())
+                    return 0;
+                },
+                onTerminated: () => {
+                    print('terminated')
+                },
+                maxPenetration: this.penetration,
+                range: 999,
+                origin: position,
+                direction: direction,
+                ignoreInstances: [this.client.Character as Instance],
+                ignoreNames: [],
+                ignorePlayers: [],
+                ignoreHumanoidRootPart: true,
+            });
+        }
+    }
     loadRemotes() {
         if (this.remotesLoaded) return;
         this.remotesLoaded = true;
@@ -333,6 +366,31 @@ export default class weaponCore extends sohk.sohkComponent {
                 }
                 return [this.ammo, this.maxAmmo, this.ammoOverload, this.reserve];
             }
+            
+            let shoot = new Instance("RemoteEvent");
+            shoot.Parent = remotebin;
+
+            shoot.OnServerEvent.Connect((player: Player, ...args: unknown[]) => {
+                if (player !== this.client) {
+                    when.playerFiringRemoteThatIsntTheirs(this.client);
+                    return;
+                }
+
+                let origin = args[0];
+                let direction = args[1];
+                let verify = verifyParam([
+                    t.Vector3, t.Vector3
+                ],
+                    [
+                        origin, direction
+                ]);
+                if (verify) {
+                    this.shoot(origin as Vector3, direction as Vector3)
+                }
+                else {
+                    throw `a type doesn't conform to the check`
+                }
+            })
 
             return {
                 remotes: {
@@ -340,6 +398,7 @@ export default class weaponCore extends sohk.sohkComponent {
                     reload: reload,
                     cancelReload: cancelReload,
                     firemode: firemode,
+                    shoot: shoot,
                 },
                 calls: {
                     requestAmmo: requestAmmo

@@ -22,6 +22,7 @@ import knife_saber from "./content/guns/knife/knife_saber";
 import { camera } from "./classes/camera";
 import muon_item from "./content/abilities/muon_item";
 import env from "./dumps/env";
+import hk416_default from "./content/guns/hk416/hk416_default";
 
 const sk = new sohk();
 

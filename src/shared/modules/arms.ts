@@ -40,6 +40,5 @@ export default class arms {
             selected.Transform = selected.Transform.Lerp(goal, math.clamp(t * 2, 0, 1))
 
         });
-        print('playing tween');
     }
 }

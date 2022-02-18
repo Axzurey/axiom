@@ -53,10 +53,16 @@ export default class weaponCore extends sohk.sohkComponent {
 
     penetration: number = 3;
 
+    spreadHipfirePenalty: number = 2;
+    spreadMovementHipfirePenalty: number = 2;
+    spreadUpPerShot: number = 2;
+
+    spreadBin: number[] = [];
+
     viewModelRecoil: {x: number, y: number, z: number, rUp: number} = {
         x: 0,
         y: 0,
-        z: .8,
+        z: .4,
         rUp: 0
     }
 
@@ -98,15 +104,13 @@ export default class weaponCore extends sohk.sohkComponent {
     fireModeSwitchCooldown: number = .75;
     skin: string;
 
-    recoil: {x: number, y: number} = {x: 5, y: 9};
-
     recoilPattern: {x: number, y: number}[] = [
         {x: 5, y: 9}, {x: -3, y: 9}, {x: 5, y: 9}, {x: -5, y: 10}, {x: -8, y: 12}, {x: 8, y: 12},
         {x: 11, y: 14}, {x: -10, y: 16}, {x: 12, y: 14}
     ];
     recoilIndex: number = 0;
     lastRecoil: number = tick();
-    recoilRegroupTime: number = 1.2;
+    recoilRegroupTime: number = 1;
 
     sight: sightcore | undefined = undefined;
 
@@ -392,22 +396,32 @@ export default class weaponCore extends sohk.sohkComponent {
         let recoilValue = this.recoilPattern[this.recoilIndex] || this.recoilPattern[this.recoilPattern.size() - 1];
 
         this.ctx.springs.recoil.shove(new Vector3(-recoilValue.x / 25, recoilValue.y / 25, 0))
-        this.ctx.crosshair.pushRecoil(3, .5);
+        this.ctx.crosshair.pushRecoil(2, this.recoilRegroupTime);
     }
     fireScan() {
-        const Bullet = new bullet({
-            onHit: (result) => {
-                return 0;
-            },
-            maxPenetration: this.penetration,
-            range: 999,
-            origin: this.ctx.camera.CFrame.Position,
-            direction: this.ctx.camera.CFrame.LookVector,
-            ignoreInstances: [this.ctx.character, this.ctx.camera],
-            ignoreNames: [...minerva.extractKeysFromDictionaries([worldData.explicitMetallic, worldData.explicitMetallic])],
-            ignorePlayers: [],
-            ignoreHumanoidRootPart: true,
-        })
+        let mult = this.spreadBin.size() + 1;
+        let calculated = this.spreadUpPerShot * mult * (this.ctx.aiming? 0: this.spreadHipfirePenalty) * (this.ctx.humanoid.MoveDirection.Magnitude === -0? 1: this.spreadMovementHipfirePenalty);
+        calculated = math.clamp(calculated, -5, 5);
+        
+        let random = new Random();
+        let finalX = random.NextNumber(-calculated, calculated);
+        let finalY = random.NextNumber(-calculated, calculated);
+        
+        let origin = this.ctx.camera.CFrame;
+        let spread = CFrame.Angles(math.rad(finalX), math.rad(finalY), 0);
+
+        //let direction = origin.mul(spread).LookVector;
+        let direction = this.ctx.crosshair.getSpreadDirection(this.ctx.camera);
+
+        let effectorigin = this.viewmodel.barrel.Position;
+        let trace = new tracer(effectorigin, direction, 1.5, new Color3(0, 1, 1));
+
+        this.remotes.shoot.FireServer(origin.Position, direction);
+        this.spreadBin.push(0);
+        coroutine.wrap(() => {
+            task.wait(1);
+            this.spreadBin.pop();
+        })()
     }
     fire() {
         if (this.void) return;
@@ -487,9 +501,7 @@ export default class weaponCore extends sohk.sohkComponent {
                 this.recoilVM();
                 this.lastshot = tick();
                 this.viewmodel.audio.fire.Play();
-                let effectorigin = this.viewmodel.barrel.Position;
-                let direction = this.ctx.camera.CFrame.LookVector;
-                let trace = new tracer(effectorigin, direction, 1.5, new Color3(0, 1, 1));
+                this.fireScan();
                 /*
                 let model = ReplicatedStorage.FindFirstChild('bullet_trail')?.Clone() as BasePart;
                 model.Parent = Workspace;

@@ -40,7 +40,15 @@ export default function connection<T extends cnct>() {
                     if (index !== -1) {
                         this.connections.remove(index);
                     }
-                }
+                },
+                wait: () => {
+                    while (!t.called) {
+                        task.wait();
+                    };
+                    return t.passedArgs
+                },
+                called: false,
+                passedArgs: []
             }
             this.connections.push(t);
             return t;
@@ -50,6 +58,8 @@ export default function connection<T extends cnct>() {
                 remote.FireAllClients(this.selfName, ...args);
                 this.connections.forEach((v) => {
                     coroutine.wrap(() => {
+                        v.passedArgs = args;
+                        v.called = true;
                         v.callback(...args);
                     })()
                 })
@@ -57,6 +67,8 @@ export default function connection<T extends cnct>() {
             else if (RunService.IsClient()) {
                 this.connections.forEach((v) => {
                     coroutine.wrap(() => {
+                        v.passedArgs = args;
+                        v.called = true;
                         v.callback(...args);
                     })()
                 })
@@ -65,6 +77,8 @@ export default function connection<T extends cnct>() {
         static activateForServerOnly(...args: Parameters<T>) {
             this.connections.forEach((v) => {
                 coroutine.wrap(() => {
+                    v.passedArgs = args;
+                    v.called = true;
                     v.callback(...args);
                 })()
             })
