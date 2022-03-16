@@ -9,6 +9,8 @@ const animationsMap = {
     ["glock18_reload"]: 'rbxassetid://8506671937',
     ["glock18_fire"]: 'rbxassetid://8624419715',
 
+    ["hk416_idle"]: 'rbxassetid://8928475381',
+
     ["muon_idle"]: 'rbxassetid://8699491488',
     ["muon_throw"]: 'rbxassetid://8702426608',
 

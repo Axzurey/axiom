@@ -408,7 +408,6 @@ export default class weaponCore extends sohk.sohkComponent {
         let finalY = random.NextNumber(-calculated, calculated);
         
         let origin = this.ctx.camera.CFrame;
-        let spread = CFrame.Angles(math.rad(finalX), math.rad(finalY), 0);
 
         //let direction = origin.mul(spread).LookVector;
         let direction = this.ctx.crosshair.getSpreadDirection(this.ctx.camera);
@@ -502,6 +501,7 @@ export default class weaponCore extends sohk.sohkComponent {
                 this.lastshot = tick();
                 this.viewmodel.audio.fire.Play();
                 this.fireScan();
+                print("FIREEEEEEEEEEEE")
                 /*
                 let model = ReplicatedStorage.FindFirstChild('bullet_trail')?.Clone() as BasePart;
                 model.Parent = Workspace;
@@ -511,8 +511,8 @@ export default class weaponCore extends sohk.sohkComponent {
                 model.CanTouch = false;
                 model.Anchored = false;
                 model.ApplyImpulse(direction.mul(1000));
-                Debris.AddItem(model, 3);*/
-                this.remotes.fire.FireServer(this.ctx.camera.CFrame.Position, this.ctx.camera.CFrame.LookVector);
+                Debris.AddItem(model, 3);
+                this.remotes.fire.FireServer(this.ctx.camera.CFrame.Position, this.ctx.camera.CFrame.LookVector);*/
             }
         }
         else if (this.isAMelee) {

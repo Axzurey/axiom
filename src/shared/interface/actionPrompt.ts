@@ -1,5 +1,6 @@
 import { Players } from "@rbxts/services";
 import { paths } from "shared/config/paths";
+import { mathf } from "shared/modules/System";
 import path from "shared/phyx/path";
 
 const client = Players.LocalPlayer;
@@ -7,9 +8,23 @@ const client = Players.LocalPlayer;
 const playergui = client.WaitForChild('PlayerGui')
 
 type promptInstance = Frame & {
-    keyblock: Frame & {
-        key: TextLabel
-    },
+    progress: Frame & {
+        centerText: TextLabel,
+        left: Frame & {
+            cycle: Frame & {
+                UIStroke: UIStroke & {
+                    UIGradient: UIGradient
+                }
+            }
+        }
+        right: Frame & {
+            cycle: Frame & {
+                UIStroke: UIStroke & {
+                    UIGradient: UIGradient
+                }
+            }
+        }
+    }
     prefix: TextLabel,
     suffix: TextLabel,
 }
@@ -30,11 +45,22 @@ export default class actionPrompt {
 
         this.instance.prefix.Text = prefix;
         this.instance.suffix.Text = suffix;
-        this.instance.keyblock.key.Text = key.Name.upper();
+        this.instance.progress.centerText.Text = key.Name.upper();
+
+        this.updatePercentageDelta(0)
+    }
+    updatePercentageDelta(normalizedPercentage: number) {
+        let denormal = mathf.denormalize(0, 360, normalizedPercentage);
+        print(denormal)
+        this.instance.progress.right.cycle.UIStroke.UIGradient.Rotation = math.clamp(denormal, 0, 180);
+        if (denormal > 180) {
+            denormal = denormal - 180
+        }
+        this.instance.progress.left.cycle.UIStroke.UIGradient.Rotation = -180 - math.clamp(denormal, -180, 0);
     }
     changeKey(key: Enum.KeyCode | Enum.UserInputType) {
         if (!this.active) throw `this instance has already been destroyed`
-        this.instance.keyblock.key.Text = key.Name.upper();
+        this.instance.progress.centerText.Text = key.Name.upper();
     }
     show() {
         if (!this.active) throw `this instance has already been destroyed`

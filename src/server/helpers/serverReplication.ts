@@ -1,4 +1,5 @@
 import { Players, TweenService } from "@rbxts/services";
+import env from "server/dumps/env";
 import { main } from "server/main.server";
 import { action } from "shared/config/replication/replication";
 import verifyTypes from "shared/functions/verifyTypes";
@@ -8,11 +9,18 @@ namespace serverReplication {
     export const serverReplicationFunctions: Partial<Record<action, (me: main, player: Player, action: action, ...args: never[]) => void>> = {
         toggleLean: (me: main, player: Player, action: action, direction: 1 | 0 | -1) => {
             if (direction !== 1 && direction !== 0 && direction !== -1) return;
+            let characterbox = env.characterHitboxes[`player:${player.UserId}:hitbox`];
+            characterbox.lean(direction);
             me.replicationService.remotes.act.FireAllClients(action, player.Character, direction);
         },
         updateCameraOrientation: (me: main, player: Player, action: action, cameraid: string, orientation: Vector3) => {
             let c1 = verifyTypes([{expected: "string", value: cameraid}, {expected: "Vector3", value: orientation}]);
             if (!c1) return;
+            me.cameras.forEach((v) => {
+                if (v.cameraId === cameraid) {
+                    v.playerAttemptsToControlCamera(player, orientation);
+                }
+            });
         },
         joinCamera: (me: main, player: Player, action: action, cameraid: string) => {
             let c1 = verifyTypes([{expected: "string", value: cameraid}]);
@@ -58,6 +66,8 @@ namespace serverReplication {
             let valid = me.replChar.validateCFrame(player, cf);
             if (valid) {
                 me.replChar.setCFrame(player, cf);
+                let characterbox = env.characterHitboxes[`player:${player.UserId}:hitbox`];
+                characterbox.setCFrame(cf);
                 Players.GetPlayers().forEach(v => {
                     if (v === player) return;
                     me.replicationService.remotes.act.FireClient(v, action, player.Character, cf);
@@ -71,11 +81,15 @@ namespace serverReplication {
         setCamera: (me: main, player: Player, action: action, v3: Vector3) => {
             let c1 = verifyTypes([{expected: "Vector3", value: v3}]);
             if (!c1) return;
+            let characterbox = env.characterHitboxes[`player:${player.UserId}:hitbox`];
+            characterbox.headTo(v3)
             me.replicationService.remotes.act.FireAllClients(action, player.Character, v3);
         },
         equip: (me: main, player: Player, action: action, weaponName: string, weaponSkin: string) => {
             let c1 = verifyTypes([{expected: "string", value: weaponName}, {expected: "string", value: weaponSkin}]);
             if (!c1) return;
+            let characterbox = env.characterHitboxes[`player:${player.UserId}:hitbox`];
+            characterbox.equip(weaponName, weaponSkin)
             me.replicationService.remotes.act.FireAllClients(action, player.Character, weaponName, weaponSkin);
         }
     }

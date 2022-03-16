@@ -2,14 +2,18 @@ interface modix {
     callback: ((...args: never[]) => void) | undefined
     disconnect: () => void
     once: boolean
+    passedArgs: never[] | undefined
+    called: boolean
 }
 
 export default class phyxConnection<T extends (...args: never[]) => void> {
     connections: modix[] = [];
-    constructor(passed: ((args: never[]) => void)[]) {
-        passed[0] = (args: never[]) => {
+    constructor(passed: ((...args: never[]) => void)[]) {
+        passed[0] = (...args: never[]) => {
             this.connections.forEach((v, index) => {
                 coroutine.wrap(() => {
+                    v.passedArgs = args;
+                    v.called = true;
                     if (v.once) {
                         this.connections.remove(index)
                     }
@@ -29,8 +33,11 @@ export default class phyxConnection<T extends (...args: never[]) => void> {
                     this.connections.remove(index)
                 }
             },
-            once: once
+            once: true,
+            passedArgs: undefined,
+            called: false
         }
+        this.connections.push(m);
         return m;
     }
     wait() {
@@ -43,7 +50,13 @@ export default class phyxConnection<T extends (...args: never[]) => void> {
                 }
             },
             once: true,
+            passedArgs: undefined,
+            called: false
         }
-        return m;
+        this.connections.push(m);
+        while (!m.called) {
+            task.wait()
+        }
+        return (m.passedArgs as Parameters<T>)
     }
 }

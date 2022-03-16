@@ -53,29 +53,25 @@ export default class phyxRemoteProtocol<C extends remoteProtocol, S extends remo
             if (RunService.IsServer()) {
                 this.remote.OnServerInvoke = (player: Player, ...args: unknown[]) => {
                     let p: Parameters<C> = [player, ...args] as Parameters<C>;
-                    this.connections.forEach((v) => {
-                        coroutine.wrap(() => {
-                            v.callback(...p)
-                        })()
-                    })
+                    if (this.connections[0]) {
+                        return this.connections[0].callback(...p)
+                    }
                 }
             }
             else {
                 this.remote.OnClientInvoke = (...args: unknown[]) => {
                     let p: Parameters<S> = [...args] as Parameters<S>;
-                    this.connections.forEach((v) => {
-                        coroutine.wrap(() => {
-                            v.callback(...p)
-                        })()
-                    })
+                    if (this.connections[0]) {
+                        return this.connections[0].callback(...p)
+                    }
                 }
             }
         }
     }
-    connectServer(callback: (...args: Parameters<C>) => void) {
+    connectServer(callback: (...args: Parameters<C>) => ReturnType<S>) {
         interface remoteConnection {
             disconnect: () => void,
-            callback: (...args: Parameters<C>) => void,
+            callback: (...args: Parameters<C>) => ReturnType<S>,
         }
         let r: remoteConnection = {
             disconnect: () => {
@@ -89,10 +85,10 @@ export default class phyxRemoteProtocol<C extends remoteProtocol, S extends remo
         this.connections.push(r);
         return r;
     }
-    connectClient(callback: (...args: Parameters<S>) => void) {
+    connectClient(callback: (...args: Parameters<S>) => ReturnType<C>) {
         interface remoteConnection {
             disconnect: () => void,
-            callback: (...args: Parameters<S>) => void,
+            callback: (...args: Parameters<S>) => ReturnType<C>,
         }
         let r: remoteConnection = {
             disconnect: () => {
@@ -114,7 +110,22 @@ export default class phyxRemoteProtocol<C extends remoteProtocol, S extends remo
             this.remote.FireClient(client, ...args);
         }
         else {
-            return this.remote.InvokeClient(client, ...args);
+            throw `a remotefunction can not call fireclient`
+        }
+    }
+    /**
+     * DO NOT TAKE THE RETURN TYPE FOR GRANTED!
+     * ALWAYS VERIFY WHAT COMES BACK FROM THIS
+     */
+    queryClient(client: Player, ...args: Parameters<S>): ReturnType<C> {
+        if (RunService.IsClient()) {
+            throw `fireClient can only be called on the server!`
+        }
+        if (this.remote.IsA('RemoteFunction')) {
+            return this.remote.InvokeClient(client, ...args) as ReturnType<C>;
+        }
+        else {
+            throw `a remoteevent can not call queryClient`
         }
     }
     fireServer(...args: Parameters<C>) {
@@ -125,7 +136,18 @@ export default class phyxRemoteProtocol<C extends remoteProtocol, S extends remo
             this.remote.FireServer(...args);
         }
         else {
+            throw `a remotefunction can not call queryfire`
+        }
+    }
+    queryServer(...args: Parameters<C>): ReturnType<S> {
+        if (RunService.IsServer()) {
+            throw `queryServer can not be called on the client!`;
+        }
+        if (this.remote.IsA('RemoteFunction')) {
             return this.remote.InvokeServer(...args);
+        }
+        else {
+            throw `a remoteevent can not call queryserver`
         }
     }
 }

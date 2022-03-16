@@ -266,6 +266,9 @@ namespace System {
         export const lightSpeed = 299792458;
         
         //functions
+        export function angleBetween(v1: Vector3, v2: Vector3): number {
+            return acos(math.clamp(v1.Dot(v2), -1, 1));
+        }
         export function vectorIsClose(v1: Vector3, v2: Vector3, limit: number): boolean {
             return v1.sub(v2).Magnitude <= limit ? true : false;
         };

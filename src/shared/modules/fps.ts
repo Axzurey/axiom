@@ -32,6 +32,11 @@ import muon from "shared/content/abilities/muon";
 import projectile_handler from "shared/passive/projectile_handler";
 import hk416_default from "shared/content/guns/hk416/hk416";
 import actionPrompt from "shared/interface/actionPrompt";
+import keyHold from "shared/classes/keyHold";
+import { gameConfig } from "shared/config/gameConfig";
+import finisher_receive_protocol from "shared/protocols/finisher_receive_protocol";
+import { finishers } from "shared/content/mapping/finishers";
+import camera_request_protocol from "shared/protocols/camera_request_protocol";
 
 export default class fps_framework extends sohk.sohkComponent {
     camera: Camera = Workspace.CurrentCamera as Camera;
@@ -115,13 +120,15 @@ export default class fps_framework extends sohk.sohkComponent {
         "plant/defuse": Enum.KeyCode.F,
         dropBomb: Enum.KeyCode.Four,
         toggleCamera: Enum.KeyCode.B,
+        nextCamera: Enum.KeyCode.Right,
+        previousCamera: Enum.KeyCode.Left
         /*
         ping: Enum.KeyCode.Z,
         leaderBoard: Enum.KeyCode.Tab,*/
     }
     loadout: fps_framework_types.loadout = {
         primary: {
-            module: new mpx_default(this, {sight: 'holographic'}),
+            module: new hk416_default(this, {sight: 'holographic'}),
             equipped: false,
             sight: {
                 name: 'holographic',
@@ -177,11 +184,15 @@ export default class fps_framework extends sohk.sohkComponent {
         rappelPrompt: new actionPrompt('HOLD', 'TO RAPPEL', this.keybinds.rappel),
         rappelExitPrompt: new actionPrompt('PRESS', 'TO EXIT RAPPEL', this.keybinds.rappel),
     }
-
-    constructor() {
-        super();
-        let mval = this.crosshair.addMultiplierValue(this.crosshairOffsets.movementMultiplier);
+    initProtocols() {
+        const cameras = camera_request_protocol.queryServer();
+        for (const [cameraid, config] of pairs(cameras)) {
+            print(`accepted camera ${cameraid}`)
+            let cam = new clientCamera.camera(cameraid, config);
+            this.cameras.push(cam);
+        }
         clientService.createCamera.connect((cameraid, config) => {
+            print(`accepted new camera ${cameraid}`)
             let cam = new clientCamera.camera(cameraid, config);
             this.cameras.push(cam);
         })
@@ -190,6 +201,28 @@ export default class fps_framework extends sohk.sohkComponent {
                 this.iHaveBomb = true;
             }
         })
+        finisher_receive_protocol.connectClient((finisher, params) => {
+            let call = finishers[finisher];
+            if (call) {
+                call(params)
+            }
+            else {
+                throw `finisher ${finisher} has not been implemented`
+            }
+        })
+        matchService.playerDropsBomb.connect(() => {
+            this.iHaveBomb = false;
+        })
+        this.replicationService.remotes.act.OnClientEvent.Connect((action: action, ...args: unknown[]) => {
+            replication.handleReplicate(action, ...args);
+        })
+    }
+    constructor() {
+        super();
+        let mval = this.crosshair.addMultiplierValue(this.crosshairOffsets.movementMultiplier);
+
+        this.initProtocols()
+
         RunService.BindToRenderStep('cameraLock', Enum.RenderPriority.Camera.Value + 200, (dt) => {
             if (this.rappelling && this.rappelWall) {
                 this.cameraController.maxAngleX = 110;
@@ -205,12 +238,6 @@ export default class fps_framework extends sohk.sohkComponent {
             else {
                 this.cameraController.minAngleY = -80
             }
-        })
-        matchService.playerDropsBomb.connect(() => {
-            this.iHaveBomb = false;
-        })
-        this.replicationService.remotes.act.OnClientEvent.Connect((action: action, ...args: unknown[]) => {
-            replication.handleReplicate(action, ...args);
         })
         let promptRenderer = RunService.RenderStepped.Connect(() => {
             this.updatePrompts()
@@ -272,7 +299,11 @@ export default class fps_framework extends sohk.sohkComponent {
                 }
             }
             if (this.keyIs(input, 'rappel')) {
-                this.attemptRappel();
+                let hold = new keyHold(this.keybinds.rappel, gameConfig.rappelEnterHoldTime);
+                let [timeHeld] = hold.keyRaised.wait(); //update actionPrompt percentage
+                if (timeHeld >= gameConfig.rappelEnterHoldTime) {
+                    this.attemptRappel();
+                }
             }
             if (this.keyIs(input, 'primaryAbility')) {
                 this.Abilities.primaryAbility.module.trigger();
@@ -289,6 +320,15 @@ export default class fps_framework extends sohk.sohkComponent {
                 if (eq && eq.module.isAGun) {
                     eq.module.switchFireMode();
                 }
+            }
+            if (this.keyIs(input, 'toggleCamera')) {
+                this.onCamera = !this.onCamera;
+            }
+            if (this.keyIs(input, 'nextCamera')) {
+                this.selectedCamera ++;
+            }
+            if (this.keyIs(input, 'previousCamera')) {
+                this.selectedCamera --;
             }
         })
         let inputhandler2 = UserInputService.InputEnded.Connect((input) => {
@@ -647,7 +687,7 @@ export default class fps_framework extends sohk.sohkComponent {
         }
     }
     attemptRappel(check: boolean = false) {
-        if (this.rappelling) {
+        if (this.rappelling || this.exitingRappel) {
             this.prompts.rappelPrompt.hide()
             return;
         };
@@ -759,7 +799,7 @@ export default class fps_framework extends sohk.sohkComponent {
                     }
                 })
                 if (tick() - started > 1) {
-                    if (_target || humanY >= requiredY || humanY <= dequiredY) {
+                    if (_target || humanY >= requiredY || humanY <= dequiredY && !this.exitingRappel) {
                         this.prompts.rappelExitPrompt.show()
                     }
                     else {
@@ -920,7 +960,7 @@ export default class fps_framework extends sohk.sohkComponent {
         }
     }
     attemptVault(check: boolean = false) {
-        if (this.vaulting || this.rappelling) {
+        if (this.vaulting || this.rappelling || this.exitingRappel) {
             this.prompts.vaultPrompt.hide()
             return
         }
@@ -933,7 +973,9 @@ export default class fps_framework extends sohk.sohkComponent {
         if (forceReturn) return;
         const vaultdistance = 8;
         const ignore = new RaycastParams();
-        ignore.FilterDescendantsInstances = [this.camera, this.character, Workspace.FindFirstChild('ignore') as Folder];
+        ignore.FilterDescendantsInstances = [this.camera, this.character, Workspace.FindFirstChild('ignore') as Folder,
+        Workspace.FindFirstChild('hitboxes') as Folder
+    ];
 
         let result = Workspace.Raycast(this.camera.CFrame.Position, this.camera.CFrame.LookVector.mul(vaultdistance), ignore);
         if (result) {
@@ -957,7 +999,7 @@ export default class fps_framework extends sohk.sohkComponent {
 
             let blockoff = 1; //so it has a bit more room
 
-            mathf.plotInWorld(topSurface.add(inset), new Color3(0, 1, .5))
+            //mathf.plotInWorld(topSurface.add(inset), new Color3(0, 1, .5))
 
             let topOccupied = Workspace.Raycast(topSurface.add(inset), new Vector3(0, boundingSize.Y + blockoff, 0), ignore);
 
@@ -1054,6 +1096,7 @@ export default class fps_framework extends sohk.sohkComponent {
         let result = Workspace.Raycast(current.Position,
             current.RightVector.mul(3).mul(leanto), ignore);
         if (result) {
+            if (result.Instance.Name.find('hitbox')) return 1;
             let dst = (current.Position.sub(result.Position)).Magnitude;
             let nrm = mathf.normalize(0, 1, dst - 1.2); //magic number :/
             return nrm;
@@ -1077,20 +1120,40 @@ export default class fps_framework extends sohk.sohkComponent {
         let rootpart = this.character.FindFirstChild("HumanoidRootPart") as BasePart;
         replication.replicate(this, 'setCamera', rootpart.CFrame.ToObjectSpace(this.camera.CFrame).LookVector);
         if (this.onCamera) {
+
+            let eq = this.getEquipped();
+            if (eq) {
+                eq.module.unequip();
+            }
             let index = this.selectedCamera;
-            if (index >= this.cameras.size()) index = 0;
+            if (index >= this.cameras.size()) this.selectedCamera = index = 0;
+            if (index < 0) {this.selectedCamera = index = this.cameras.size() - 1};
+
+            let delta = UserInputService.GetMouseDelta()
+            UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+
+            this.humanoid.WalkSpeed = 0;
 
             this.cameras.forEach((v, i) => {
                 if (i === index) {
-                    v.joinCamera();
+                    if (!v.currentlyUsing) {
+                        v.joinCamera();
+                    }
+                    this.camera.CameraType = Enum.CameraType.Scriptable;
+                    v.setOrientation(new Vector3(-delta.X, -delta.Y, 0))
+                    this.camera.CFrame = v.getCFrame();
                 }
                 else {
-                    v.leaveCamera();
+                    if (v.currentlyUsing) {
+                        v.leaveCamera();
+                    }
                 }
             })
         }
         else if (equipped && equipped.module.viewmodel) {
             
+            this.camera.CameraType = Enum.CameraType.Fixed;
+
             let vm: fps_framework_types.viewmodel = equipped.module.viewmodel;
             let env = equipped.module;
             let cf = vm.offsets.idle.Value;
@@ -1257,25 +1320,32 @@ export default class fps_framework extends sohk.sohkComponent {
             
             let zoom = equipped.module.sight?.zoom || 1;
 
-            let sensX = mathf.lerp(localConfig.sensitivityX, localConfig.sensitivityX * localConfig.aimSensitivityMultiplier, this.offsets.aimSensitivityMultiplier.Value);
-            let sensY = mathf.lerp(localConfig.sensitivityY, localConfig.sensitivityY * localConfig.aimSensitivityMultiplier, this.offsets.aimSensitivityMultiplier.Value);
-            
-            this.cameraController.sensitivityMultiplierX = sensX;
-            this.cameraController.sensitivityMultiplierY = sensY;
-
             this.camera.FieldOfView = mathf.lerp(localConfig.fov, localConfig.fov / zoom, this.offsets.zoomFovMultiplier.Value);
             
             equipped.module.update();
         }
-        replication.replicate(this, 'setCFrame', this.character.GetPrimaryPartCFrame());
+
+        let charcf = this.character.GetPrimaryPartCFrame();
+        let [_rx1, ry1, _rz1] = this.camera.CFrame.ToOrientation()
+        let [rx2, ry2, rz2] = charcf.ToOrientation();
+        if (this.onCamera) {
+            ry1 = ry2
+        }
+        charcf = new CFrame(charcf.Position).mul(CFrame.fromOrientation(rx2, ry1, rz2));
+        replication.replicate(this, 'setCFrame', charcf);
 
         this.crosshairOffsets.movementMultiplier.Value = 
             mathf.lerp(this.crosshairOffsets.movementMultiplier.Value, 
                     this.humanoid.MoveDirection.Magnitude === 0? 1: 2, .1
             )
 
+        let sensX = mathf.lerp(localConfig.sensitivityX, localConfig.sensitivityX * localConfig.aimSensitivityMultiplier, this.offsets.aimSensitivityMultiplier.Value);
+        let sensY = mathf.lerp(localConfig.sensitivityY, localConfig.sensitivityY * localConfig.aimSensitivityMultiplier, this.offsets.aimSensitivityMultiplier.Value);
+        
+        this.cameraController.sensitivityMultiplierX = sensX;
+        this.cameraController.sensitivityMultiplierY = sensY;
+
         this.humanoid.JumpPower = 0;
         this.humanoid.UseJumpPower = true;
-
     }
 }

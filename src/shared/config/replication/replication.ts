@@ -219,11 +219,11 @@ namespace replication {
             
             let y2 = torso.C0.Y;
             let set2 = new CFrame(0, y2, 0)
-            .mul(CFrame.Angles(0, 0, math.rad(-10) * (info? (info as {value: NumberValue}).value.Value: 0)))
+            .mul(CFrame.Angles(0, 0, math.rad(-20) * (info? (info as {value: NumberValue}).value.Value: 0)))
             .mul(CFrame.Angles(math.clamp(math.asin(v3.Y),
                 math.rad(-45), math.rad(45)
             ), 0, 0));
-            torso.C0 = torso.C0.Lerp(set2, .1);
+            torso.C0 = torso.C0.Lerp(set2, .2);
         }
     }
     export function handleReplicate(action: action, ...args: unknown[]) {

@@ -12,6 +12,8 @@ import verifyParam from "shared/functions/verifyParam";
 import bullet from "shared/classes/bullet";
 import { t } from "@rbxts/t";
 import { mathf } from "shared/modules/System";
+import confirmation from '../helpers/confirmation'
+import finisher_receive_protocol from "shared/protocols/finisher_receive_protocol";
 
 export default class weaponCore extends sohk.sohkComponent {
     client: Player;
@@ -277,26 +279,62 @@ export default class weaponCore extends sohk.sohkComponent {
             if (tick() - this.lastfired < 60 / this.firerate) return;
             this.lastfired = tick();
             this.ammo -= 1;
-            const Bullet = new bullet({
-                onHit: (result) => {
-                    print('hit something')
-                    let position = result.position;
-                    mathf.plotInWorld(position, new Color3(1, .5, .5))
-                    minerva.createBulletHole(position, result.normal, result.material, .5, new Color3())
-                    return 0;
-                },
-                onTerminated: () => {
-                    print('terminated')
-                },
-                maxPenetration: this.penetration,
-                range: 999,
-                origin: position,
-                direction: direction,
-                ignoreInstances: [this.client.Character as Instance],
-                ignoreNames: [],
-                ignorePlayers: [],
-                ignoreHumanoidRootPart: true,
-            });
+            let terminated = false;
+            while (!terminated) {
+                const Bullet = new bullet({
+                    onHit: (result) => {
+                        print('hit something')
+                        let position = result.position;
+                        minerva.createBulletHole(position, result.normal, result.material, .5, new Color3())
+                        let instance = result.hit;
+                        const [isHitbox, hitboxName, hitboxInstance] = confirmation.isACharacterHitbox(instance);
+                        if (isHitbox && hitboxName !== `player:${this.client.UserId}:hitbox`) {
+                            for (const [i, v] of pairs(env.characterClasses)) {
+                                if (v.hitbox === hitboxInstance) {
+                                    if (v.alive) {
+                                        v.inflictDamage(25)
+                                        if (!v.alive) {
+                                            print('it died!');
+                                            Players.GetPlayers().forEach((player) => {
+                                                finisher_receive_protocol.fireClient(player, 'mechanica', {
+                                                    character: v.character,
+                                                    impactColor: result.hit.Color,
+                                                    impactNormal: result.normal,
+                                                    impactPosition: result.position,
+                                                    impactMaterial: result.material
+                                                })
+                                            })
+                                        }
+                                    }
+                                    else {
+                                        break;
+                                    }
+                                }
+                            }
+                            return 0;
+                        }
+                        else if (isHitbox) {
+                            return 0;
+                        }
+                        else {
+                            //likely a basepart
+                            return 1;
+                        }
+                    },
+                    onTerminated: () => {
+                        print('terminated')
+                        terminated = true;
+                    },
+                    maxPenetration: this.penetration,
+                    range: 999,
+                    origin: position,
+                    direction: direction,
+                    ignoreInstances: [this.client.Character as Instance],
+                    ignoreNames: [],
+                    ignorePlayers: [],
+                    ignoreHumanoidRootPart: true,
+                });
+            }
         }
     }
     loadRemotes() {

@@ -9,7 +9,7 @@ export default class hk416_default extends weaponCore {
             {
                 name: 'hk416',
                 animationIds: {
-                    idle: animationsMap.mpx_idle,
+                    idle: animationsMap.hk416_idle,
                     reload: animationsMap.mpx_reload,
                     equip: animationsMap.mpx_equip,
                 },

@@ -1,13 +1,20 @@
 import { RunService } from "@rbxts/services";
 import { teamRoles, teams } from "shared/services/matchservice";
 import sohk from "shared/sohk/init";
+import characterHitbox from "./classes/characterHitbox";
 import effect from "./content/effectcore";
 import regeneration from "./content/effects/regeneration";
 
 const allEffects: Record<string, typeof effect> = {regeneration: regeneration}; //like that ;)
 
+type character = Model & {
+    Humanoid: Humanoid,
+    HumanoidRootPart: BasePart,
+}
+
 export default class characterClass extends sohk.sohkComponent {
-    client: Player;
+    client: Player | undefined;
+    isABot: boolean;
 
     maxHealth: number = 100;
     health: number = 75;
@@ -26,10 +33,22 @@ export default class characterClass extends sohk.sohkComponent {
     lastRappel: number = tick();
     RAPPEL_COOLDOWN: number = 1;
 
-    constructor(client: Player) {
+    hitbox: characterHitbox
+    character: character
+    /**
+     * 
+     * @param client omit this parameter if it's a bot
+     */
+    constructor(client: Player | undefined, hitbox: characterHitbox, character: Model) {
         super();
         this.client = client;
+        this.isABot = client? false: true
         this.alive = true;
+
+        this.character = character as character;
+
+        this.hitbox = hitbox;
+
         let conn = RunService.Stepped.Connect((st, dt) => {
             if (!this.client) {conn.Disconnect(); return;}
             let hum = this.client.Character?.FindFirstChildOfClass('Humanoid');
@@ -70,6 +89,7 @@ export default class characterClass extends sohk.sohkComponent {
             this.lastOverheal = tick();
         }
         coroutine.wrap(() => {
+            if (!this.client) return;
             this.replicationService.remotes.requestPlayerHealth.InvokeClient(this.client, this.health, this.maxHealth)
         })()
     }
@@ -82,7 +102,8 @@ export default class characterClass extends sohk.sohkComponent {
             this.alive = true;
         }
         coroutine.wrap(() => {
+            if (!this.client) return;
             this.replicationService.remotes.requestPlayerHealth.InvokeClient(this.client, this.health, this.maxHealth)
-        })()
+        })() 
     }
 }

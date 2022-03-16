@@ -88,14 +88,16 @@ export default class bullet {
                     pens += increment;
                     if (pens >= params.maxPenetration) {
                         terminated = true;
+                        break;
                     }
                 }
                 else {
-                    print('params.onhit not implemented!')
+                    throw 'params.onhit not implemented!'
                 }
             }
             else {
                 terminated = true;
+                break;
             }
         }
         if (params.onTerminated) {

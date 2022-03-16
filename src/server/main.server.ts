@@ -23,13 +23,61 @@ import { camera } from "./classes/camera";
 import muon_item from "./content/abilities/muon_item";
 import env from "./dumps/env";
 import hk416_default from "./content/guns/hk416/hk416_default";
+import characterHitbox from "./classes/characterHitbox";
+import clientService from "shared/services/clientService";
+import clientCamera from "shared/classes/clientCamera";
+import camera_request_protocol from "shared/protocols/camera_request_protocol";
+import get_camera_controlling_protocol from "shared/protocols/get_camera_controlling_protocol";
+import { bot } from "./logicCircuit/bot";
+import hostileEntityModel from "./quart/aiModels/hostileEntityModel";
+import quartUtils from "./quart/quartUtils";
 
 const sk = new sohk();
 
 export class main extends sohk.sohkComponent {
     replChar: characterReplicator = new characterReplicator();
     cameras: camera[] = [];
+    cameraIdValue = 0;
     clientdata: Record<userid, clientData>;
+    initCams() {
+        coroutine.wrap(() => {
+            print("cameras being initialized!!!")
+            let cambin = Workspace.FindFirstChild('cameras') as Folder;
+            cambin.GetChildren().forEach((cameraModel) => {
+                let [x, y, z] = CFrame.lookAt(new Vector3(0, 1, 0), new Vector3(0, 0, 0)).ToOrientation()
+                let cameraClass = new camera(tostring(this.cameraIdValue), {
+                    instance: cameraModel as Model & {
+                        view: Part
+                    },
+                    maxUp: 45,
+                    maxDown: 90,
+                    maxRight: 45,
+                    maxLeft: 90,
+                    originalOrientation: new Vector3(x, y, z)
+                });
+                this.cameraIdValue ++;
+                this.cameras.push(cameraClass)
+            })
+        })()
+    }
+    initProtocols() {
+        camera_request_protocol.connectServer(() => {
+            let cameras: Record<string, clientCamera.cameraConfig> = {};
+            this.cameras.forEach((cam) => {
+                cameras[cam.cameraId] = cam.config;
+            })
+
+            return cameras;
+        })
+        get_camera_controlling_protocol.connectServer((cameraid: string) => {
+            this.cameras.forEach((v) => {
+                if (v.cameraId === cameraid) {
+                    return v.controlling
+                }
+            })
+            return undefined;
+        })
+    }
     constructor() {
         super();
 
@@ -38,18 +86,92 @@ export class main extends sohk.sohkComponent {
         let clientdata: Record<userid, clientData> = {};
         this.clientdata = clientdata;
 
+        this.initCams()
+        this.initProtocols()
+
+        coroutine.wrap(() => {
+            for (let i = 0; i < 1; i++) {
+                
+                let model = ReplicatedStorage.WaitForChild("bot").Clone() as Model
+
+                model.SetPrimaryPartCFrame(
+                    new CFrame(model.GetPrimaryPartCFrame().Position.add(new Vector3(math.random(-10, 10), 0, math.random(-10, 10)))))
+
+                model.Parent = Workspace.WaitForChild('bots')
+
+                let clone = model.Clone();
+
+                clone.SetPrimaryPartCFrame(model.GetPrimaryPartCFrame().mul(new CFrame(0, 0, 5)))
+
+                let hitbox = new characterHitbox(clone)
+
+                const amodel = new hostileEntityModel({
+                    physicalModel: model,
+                    seeksTarget: true,
+                })
+
+                let b = Workspace.WaitForChild("roaming").GetChildren() as BasePart[]
+
+                amodel.predefineddLocations = quartUtils.partToPosition(b)
+
+                let botx = new bot({
+                    baseHealth: 100,
+                    maxHealth: 100,
+                    model: model,
+                    hitbox: hitbox,
+                    baseSpeed: 10,
+                    stationary: false,
+                    invincible: true,
+                    aiModel: amodel
+                })
+            }
+        })()
+
+        function t() {
+            let character = Workspace.WaitForChild('fae') as Model;
+
+            let clone = character.Clone();
+
+            clone.SetPrimaryPartCFrame(character.GetPrimaryPartCFrame().mul(new CFrame(0, 0, 5)))
+
+            let hitbox = new characterHitbox(clone)
+
+            env.characterHitboxes[`bot:1:hitbox`] = hitbox;
+
+            const cls = new characterClass(undefined, hitbox, character);
+
+            env.characterClasses[132] = cls;
+        }
+
+        t()
+
         Players.PlayerAdded.Connect((client) => {
-            const cls = new characterClass(client);
+
+            let character = client.Character || client.CharacterAdded.Wait()[0];
+            character.Archivable = true;
+
+            let clone = character.Clone();
+            clone.Archivable = true
+            clone.Name = 'hitbox'
+            let hitbox = new characterHitbox(clone)
+
+            env.characterHitboxes[`player:${client.UserId}:hitbox`] = hitbox;
+
+            const cls = new characterClass(client, hitbox, character);
+
             env.characterClasses[client.UserId] = cls;
             this.replChar.newPlayer(client);
+
+            //load animations for hitbox
+
             float.playerCharacterClasses[client.UserId] = cls;
             clientdata[client.UserId] = {
                 charClass: cls,
                 loadout: {
                     primary: {
-                        name: 'mpx',
+                        name: 'hk416',
                         skin: 'default',
-                        module: new mpx_default(client, cls),
+                        module: new hk416_default(client, cls),
                     },
                     secondary: {
                         name: 'glock18',
@@ -76,6 +198,7 @@ export class main extends sohk.sohkComponent {
                     }
                 }
             }
+
         })
 
         const loadreq = remotes?.FindFirstChild("requestLoad") as RemoteFunction
