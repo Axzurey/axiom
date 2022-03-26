@@ -29,8 +29,9 @@ import clientCamera from "shared/classes/clientCamera";
 import camera_request_protocol from "shared/protocols/camera_request_protocol";
 import get_camera_controlling_protocol from "shared/protocols/get_camera_controlling_protocol";
 import { bot } from "./logicCircuit/bot";
-import hostileEntityModel from "./quart/aiModels/hostileEntityModel";
-import quartUtils from "./quart/quartUtils";
+import hostileEntityModel from "./quart-server/aiModels/hostileEntityModel";
+import quartUtils from "./quart-server/quartUtils";
+import define from "./quart-server/define";
 
 const sk = new sohk();
 
@@ -78,6 +79,14 @@ export class main extends sohk.sohkComponent {
             return undefined;
         })
     }
+    initRooms() {
+        coroutine.wrap(() => {
+            let b = Workspace.WaitForChild("roaming").GetChildren() as Part[];
+            b.forEach((v, i) => {
+                define.defineRoom(`testRoom:${i}`, quartUtils.groupParts([v]));
+            })
+        })()
+    }
     constructor() {
         super();
 
@@ -88,6 +97,7 @@ export class main extends sohk.sohkComponent {
 
         this.initCams()
         this.initProtocols()
+        this.initRooms();
 
         coroutine.wrap(() => {
             for (let i = 0; i < 1; i++) {

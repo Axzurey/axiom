@@ -1,4 +1,4 @@
-import gameEntity, { entityConfig } from "server/quart/gameEntity";
+import gameEntity, { entityConfig } from "server/quart-server/gameEntity";
 
 export class bot extends gameEntity {
     constructor(params: entityConfig) {
